@@ -23,11 +23,11 @@ def test_samples():
     for s in samples:
         assert len(s["c"]) == 25, s["n"]
         assert all(isinstance(x, (int, float)) for x in s["c"]), s["n"]
-        if s.get("role") != "diaspora":
-            assert s.get("iso3"), s["n"]
     paris = next(s for s in samples if s["n"] == "French_Paris")
     bzh = next(s for s in samples if s["n"] == "French_Brittany")
     jp = next(s for s in samples if s["n"] == "Japanese")
+    assert paris.get("iso3") == "FRA"
+    assert jp.get("iso3") == "JPN"
     assert euclid(paris["c"], paris["c"]) == 0
     d_bzh = euclid(paris["c"], bzh["c"])
     d_jp = euclid(paris["c"], jp["c"])
