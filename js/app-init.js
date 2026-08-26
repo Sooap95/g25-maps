@@ -178,5 +178,5 @@ async function init() {
 
 init().catch((err) => {
   console.error(err);
-  toast("Erreur de chargement : ouvrez l’app via un serveur local (pas en file://).");
+  toast("Erreur de chargement des cartes : " + (err && err.message ? err.message : err));
 });
