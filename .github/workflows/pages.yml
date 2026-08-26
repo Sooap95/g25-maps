@@ -1,0 +1,80 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enable Pages (workflow source)
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.repos.createPagesSite({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                build_type: "workflow",
+              });
+            } catch (error) {
+              core.info(String(error.message || error));
+            }
+
+      - name: Fetch G25 + GeoJSON and build maps
+        run: |
+          mkdir -p data/geo data/maps
+          curl -fsSL -o data/g25_modern_scaled.txt \
+            "https://raw.githubusercontent.com/Kerimcanak/VahaduoSpreadsheets/main/Global25_PCA_modern_pop_averages_scaled.txt"
+          curl -fsSL -o data/geo/ne_110m_countries.geojson \
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
+          curl -fsSL -o data/geo/ne_50m_countries.geojson \
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"
+          curl -fsSL -o data/geo/france_regions.geojson \
+            "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions-version-simplifiee.geojson"
+          curl -fsSL -o data/geo/france_depts.geojson \
+            "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson"
+          curl -fsSL -o data/geo/nuts1.geojson \
+            "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_1.geojson"
+          curl -fsSL -o data/geo/nuts2.geojson \
+            "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_2.geojson"
+          python3 scripts/build_data.py
+          python3 tests/test_data.py
+
+      - uses: actions/configure-pages@v5
+
+      - name: Pack site
+        run: |
+          mkdir -p _site
+          cp index.html 404.html .nojekyll _site/
+          cp -r css js data _site/
+          rm -rf _site/data/geo _site/data/g25_modern_scaled.txt
+          find _site -name '.DS_Store' -delete
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
