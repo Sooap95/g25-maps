@@ -152,14 +152,25 @@ def simplify(geom, nd, eps):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--src", default=str(ROOT.parent / "ne50m.geojson"))
+    ap.add_argument("--src", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    src = pathlib.Path(args.src)
-    if not src.exists():
+    # La CI telecharge deja le 50m dans data/geo : on le reutilise plutot que
+    # de refaire un aller-retour reseau.
+    candidates = (
+        [pathlib.Path(args.src)]
+        if args.src
+        else [ROOT / "data" / "geo" / "ne_50m_countries.geojson", ROOT.parent / "ne50m.geojson"]
+    )
+    src = next((p for p in candidates if p.exists()), None)
+    if src is None:
+        src = candidates[0]
+        src.parent.mkdir(parents=True, exist_ok=True)
         print(f"telechargement Natural Earth 50m -> {src}")
         urllib.request.urlretrieve(NE_URL, src)
+    else:
+        print(f"source 50m : {src}")
 
     ne = json.loads(src.read_text(encoding="utf-8"))
     before = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {"features": []}

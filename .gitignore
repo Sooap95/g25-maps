@@ -1,4 +1,7 @@
 data/geo/
+# Intermediaires reconstruits par la CI a chaque execution
+data/g25_modern_scaled.txt
+scripts/build_data.py
 __pycache__/
 *.pyc
 .DS_Store

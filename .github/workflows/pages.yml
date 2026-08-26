@@ -45,7 +45,20 @@ jobs:
             "https://gisco-services.ec.europa.eu/distribution/v2/nuts/geojson/NUTS_RG_20M_2021_4326_LEVL_2.geojson"
           cat scripts/build_data.part1a.py scripts/build_data.part1exact.py scripts/build_data.part1b.py scripts/build_data.part2.py scripts/build_data.part3.py > scripts/build_data.py
           python3 scripts/build_data.py
-          python3 tests/test_data.py
+
+      # build_data.py regenere data/ a chaque execution : toute retouche faite
+      # a la main sur samples.json, world.geojson ou catalog.json serait donc
+      # perdue au push suivant. Ces trois etapes sont le post-traitement, et
+      # l'ordre compte : le fond 50m d'abord, car tag_iso3 valide ses codes
+      # contre lui.
+      - name: Post-traitement des donnees
+        run: |
+          python3 scripts/build_world_50m.py
+          python3 scripts/tag_iso3.py
+          python3 scripts/set_sources.py
+
+      - name: Tests
+        run: python3 tests/test_data.py
 
       - name: Pack site
         run: |

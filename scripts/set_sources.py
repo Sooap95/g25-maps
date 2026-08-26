@@ -27,6 +27,14 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SAMPLES = ROOT / "data" / "samples.json"
+CATALOG = ROOT / "data" / "maps" / "catalog.json"
+
+# Échelle de couleur par défaut de chaque carte. Le rang n'a d'intérêt que là
+# où la distribution des distances est bimodale : sur le Monde, l'écart
+# Europe↔Afrique subsaharienne écrase sinon 39 pays dans une seule teinte.
+# Les cartes régionales ont une étendue étroite, où la distance réelle se lit.
+SCALES = {"world": "rank"}
+SCALE_DEFAULT = "auto"
 
 # `url` volontairement absent : ne pas inventer de lien de provenance.
 SOURCES = [
@@ -77,12 +85,22 @@ def main():
     else:
         print("role    : rien a changer (deja applique)")
 
+    cat = json.loads(CATALOG.read_text(encoding="utf-8"))
+    print()
+    for m in cat["maps"]:
+        m["scale"] = SCALES.get(m["id"], SCALE_DEFAULT)
+        print(f"scale   : {m['id']:<14} {m['scale']}")
+
     if not args.dry_run:
         SAMPLES.write_text(
             json.dumps(data, ensure_ascii=False, separators=(",", ":")),
             encoding="utf-8",
         )
-        print(f"\n-> {SAMPLES.name} reecrit")
+        CATALOG.write_text(
+            json.dumps(cat, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        print(f"\n-> {SAMPLES.name} et {CATALOG.name} reecrits")
 
 
 if __name__ == "__main__":
