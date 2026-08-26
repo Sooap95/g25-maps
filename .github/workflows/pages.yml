@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -45,21 +45,18 @@ jobs:
           python3 scripts/build_data.py
           python3 tests/test_data.py
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - name: Pack site
         run: |
           mkdir -p _site
           cp index.html 404.html .nojekyll _site/
           cp -r css js data _site/
-          rm -rf _site/data/geo _site/data/g25_modern_scaled.txt
+          rm -rf _site/data/geo _site/data/g25_modern_scaled.txt _site/data/deposits
           find _site -name '.DS_Store' -delete
+          find _site -name 'build_data*.py' -delete
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Publish gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site
-
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          force_orphan: true
