@@ -39,10 +39,36 @@ function assetUrl(rel) {
   return `${base}${String(rel).replace(/^\//, "")}`;
 }
 
+function dataFallbackUrls(rel) {
+  const clean = String(rel).replace(/^\//, "");
+  return [
+    assetUrl(clean),
+    `https://cdn.jsdelivr.net/gh/Sooap95/g25-maps@gh-pages/${clean}`,
+    `https://raw.githubusercontent.com/Sooap95/g25-maps/gh-pages/${clean}`,
+  ];
+}
+
 async function loadJson(url) {
-  const res = await fetch(assetUrl(url));
-  if (!res.ok) throw new Error(`Impossible de charger ${url} (${res.status})`);
-  return res.json();
+  const candidates = dataFallbackUrls(url);
+  let lastErr;
+  for (const src of candidates) {
+    try {
+      const res = await fetch(src);
+      if (!res.ok) {
+        lastErr = new Error(`Impossible de charger ${url} (${res.status})`);
+        continue;
+      }
+      const type = (res.headers.get("content-type") || "").toLowerCase();
+      if (type.includes("text/html")) {
+        lastErr = new Error(`Impossible de charger ${url} (HTML)`);
+        continue;
+      }
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error(`Impossible de charger ${url}`);
 }
 
 async function loadDepositsFile() {
