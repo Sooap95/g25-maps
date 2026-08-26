@@ -96,6 +96,21 @@ function percentile(values, p) {
   return s[lo] * (hi - i) + s[hi] * (i - lo);
 }
 
+/**
+ * Territoires que Natural Earth sépare en polygones distincts alors qu'aucune
+ * population de référence ne leur est propre : ils empruntent celle du
+ * territoire dont ils sont génétiquement indissociables.
+ *
+ * C'est un repli documenté, pas une donnée : le nom de l'échantillon reste
+ * affiché au survol, donc « Kosovo → Albanian » se lit tel quel.
+ */
+const ISO_FALLBACK = {
+  CYN: "CYP", // Chypre du Nord : même île, même population de référence
+  PRK: "KOR", // Corée du Nord : aucun échantillon distinct publié
+  SOL: "SOM", // Somaliland
+  KOS: "ALB", // Kosovo, très majoritairement albanophone
+};
+
 function samplesForFeature(feat, samples, { diaspora = false } = {}) {
   const p = feat.properties || {};
   const specific = [];
@@ -105,7 +120,14 @@ function samplesForFeature(feat, samples, { diaspora = false } = {}) {
     if (matchSpecific(p, s)) specific.push(s);
     else if (p.kind !== "country" && s.iso3 && s.iso3 === p.iso3) fallback.push(s);
   }
-  return specific.length ? specific : fallback;
+  if (specific.length) return specific;
+  if (fallback.length) return fallback;
+
+  const alias = ISO_FALLBACK[p.iso3];
+  if (!alias) return [];
+  return samples.filter(
+    (s) => (diaspora || s.role !== "diaspora") && s.iso3 === alias
+  );
 }
 
 function matchSpecific(p, s) {

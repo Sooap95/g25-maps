@@ -315,6 +315,64 @@ input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; ov
 }
 .deposit-list button { background: none; border: 0; color: var(--far); cursor: pointer; }
 
+/* Modélisation d'admixture */
+#admixResult { margin-top: 10px; }
+.admix-row { margin-bottom: 8px; }
+.admix-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.admix-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admix-head b { color: var(--copper-2); flex: none; }
+.admix-bar {
+  height: 6px;
+  background: var(--bg-3);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+.admix-bar i { display: block; height: 100%; border-radius: 99px; }
+.admix-fit {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.admix-fit b { color: var(--copper-2); }
+
+/* Panneau « Sources des données » */
+.src-item { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.src-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.src-item b { font-size: 12px; color: var(--copper-2); }
+.src-item .hint { margin-top: 3px; }
+.src-item a { color: var(--copper); overflow-wrap: anywhere; }
+.src-item a:hover { color: var(--copper-2); }
+
+/* Crédit de source en pied de popup Leaflet */
+.src-credit {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+
+/* Colonne Source du tableau : secondaire, ne doit pas voler la vedette */
+td.src-cell {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   #app { grid-template-columns: 1fr; grid-template-rows: 42vh 1fr; }
   aside { border-right: 0; border-bottom: 1px solid var(--line); }

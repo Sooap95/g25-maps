@@ -61,7 +61,6 @@ async function init() {
     worldCopyJump: false,
   });
   L.control.attribution({ prefix: false }).addTo(state.map);
-  state.map.attributionControl.addAttribution("G25 Eurogenes · Natural Earth · IGN/Etalab · Eurostat NUTS");
 
   const [catalog, sampleData] = await Promise.all([
     loadJson("data/maps/catalog.json"),
@@ -69,6 +68,9 @@ async function init() {
   ]);
   state.catalog = catalog;
   state.samples = sampleData.samples;
+  state.sources = normalizeSources(sampleData.sources || sampleData.source);
+  state.dims = sampleData.dims || 25;
+  state.map.attributionControl.addAttribution(attributionText());
   await Promise.all(
     catalog.maps.map(async (m) => {
       state.geo[m.id] = await loadJson(m.file);
@@ -83,6 +85,7 @@ async function init() {
   }
 
   populateCountrySelect();
+  renderSources();
   renderTabs();
   renderDepositList();
   paintMap();
@@ -113,6 +116,8 @@ async function init() {
     $("rangeMin").disabled = !manual;
     $("rangeMax").disabled = !manual;
     if (state.target) paintMap();
+    else updateLegendBar();
+    renderTable();
   };
   $("rangeMin").onchange = $("rangeMax").onchange = () => {
     if ($("rangeMode").value === "manual" && state.target) paintMap();
@@ -122,6 +127,11 @@ async function init() {
   };
   $("tableSearch").oninput = renderTable;
   $("btnPng").onclick = downloadPng;
+  $("btnAdmix").onclick = runAdmixture;
+  $("btnAdmixCopy").onclick = copyAdmix;
+  $("admixK").onchange = () => {
+    if (state.admix) runAdmixture();
+  };
 
   document.querySelectorAll("[data-example]").forEach((el) => {
     el.onclick = () => fillExample(el.dataset.example);

@@ -10,6 +10,10 @@ const state = {
   layer: null,
   map: null,
   range: { min: 0, max: 0.1 },
+  sources: [],
+  dims: 25,
+  rankMode: false,
+  admix: null,
 };
 
 const FR_REGIONS = [
@@ -57,6 +61,15 @@ function updateLegendBar() {
   $("legendBar").style.background = `linear-gradient(90deg, ${stops.join(",")})`;
   $("legMin").textContent = state.range.min.toFixed(4);
   $("legMax").textContent = state.range.max.toFixed(4);
+  const hint = $("rangeHint");
+  if (hint) {
+    const auto = $("rangeMode").value === "smart" ? " (choisi pour cette carte)" : "";
+    hint.textContent = state.rankMode
+      ? `Couleur = rang, pas distance${auto}. Les écarts absolus ne sont plus lisibles sur la carte ; la distance exacte reste au survol.`
+      : auto
+        ? "Couleur = distance réelle (choisi pour cette carte)."
+        : "";
+  }
 }
 
 function fitMap(spec) {
@@ -73,19 +86,21 @@ function fitMap(spec) {
 
 function popupHtml(name, pack, dist) {
   const rows = pack
+    .map((s) => ({ s, d: euclid(state.target.c, s.c) }))
+    .sort((a, b) => a.d - b.d)
     .slice(0, 6)
-    .map((s) => {
-      const d = euclid(state.target.c, s.c);
+    .map(({ s, d }) => {
       const tag = s.custom ? ' <span class="badge custom">dépôt</span>' : "";
-      return `<div>${s.n}${tag} <span class="mono">${formatDist(d)}</span></div>`;
+      return `<div>${escapeHtml(s.n)}${tag} <span class="mono">${formatDist(d)}</span></div>`;
     })
     .join("");
-  return `<b>${name}</b><div class="hint">distance ${formatDist(dist)}</div>${rows}`;
+  const src = pack.length ? sourceLabel(pack[0]) : "";
+  const credit = src ? `<div class="hint src-credit">source&nbsp;: ${escapeHtml(src)}</div>` : "";
+  return `<b>${escapeHtml(name)}</b><div class="hint">distance ${formatDist(dist)}</div>${rows}${credit}`;
 }
 
 function styleFeature(feat) {
-  const dist = feat.__dist;
-  if (dist == null) {
+  if (feat.__dist == null) {
     return {
       color: "#3a4652",
       weight: 0.7,
@@ -93,11 +108,11 @@ function styleFeature(feat) {
       fillOpacity: 0.85,
     };
   }
-  const t = (dist - state.range.min) / Math.max(1e-9, state.range.max - state.range.min);
+  // __t est calculé dans paintMap : linéaire pour auto/pct/manual, rang sinon.
   return {
     color: "#0c0f12",
     weight: 0.8,
-    fillColor: colorAt(paletteStops(), t),
+    fillColor: colorAt(paletteStops(), feat.__t ?? 0),
     fillOpacity: 0.92,
   };
 }

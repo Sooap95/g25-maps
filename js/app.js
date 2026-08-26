@@ -12,6 +12,7 @@ function analyze() {
     iso3: s.iso3,
     role: s.role,
     custom: !!s.custom,
+    src: sourceLabel(s),
   }));
   distances.sort((a, b) => a.d - b.d);
   state.distances = distances;
@@ -79,6 +80,76 @@ async function loadDepositsFile() {
   } catch (_) {
     state.fileDeposits = [];
   }
+}
+
+/**
+ * Normalise le champ `source` de samples.json.
+ * Accepte l'ancien format (une simple chaîne) comme le nouveau (objet ou
+ * tableau d'objets), pour qu'un fichier de données existant reste valide.
+ */
+function normalizeSources(raw) {
+  const one = (v) => {
+    if (!v) return null;
+    if (typeof v === "string") return { id: "base", title: v };
+    return {
+      id: v.id || "base",
+      title: v.title || v.name || "Source sans titre",
+      short: v.short || null,
+      url: v.url || null,
+      retrieved: v.retrieved || null,
+      notes: v.notes || null,
+      license: v.license || null,
+    };
+  };
+  const arr = Array.isArray(raw) ? raw.map(one) : [one(raw)];
+  return arr.filter(Boolean);
+}
+
+/** Source d'un échantillon : son `src` explicite, sinon la source de base. */
+function sourceOf(sample) {
+  if (sample?.custom) return { id: "deposit", title: "Dépôt local (ce navigateur)" };
+  const id = sample?.src;
+  if (id) return state.sources.find((s) => s.id === id) || { id, title: id };
+  return state.sources[0] || null;
+}
+
+/** Libellé court, pour les popups et le tableau. */
+function sourceLabel(sample) {
+  const s = sourceOf(sample);
+  if (!s) return "";
+  return s.short || s.title;
+}
+
+function renderSources() {
+  const box = $("sourceList");
+  if (!box) return;
+  const rows = state.sources.map((s) => {
+    const bits = [];
+    if (s.retrieved) bits.push(`relevé ${escapeHtml(s.retrieved)}`);
+    if (s.license) bits.push(escapeHtml(s.license));
+    const meta = bits.length ? `<div class="hint">${bits.join(" · ")}</div>` : "";
+    const link = s.url
+      ? `<div class="hint"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.url)}</a></div>`
+      : "";
+    const notes = s.notes ? `<div class="hint">${escapeHtml(s.notes)}</div>` : "";
+    return `<div class="src-item"><b>${escapeHtml(s.title)}</b>${meta}${link}${notes}</div>`;
+  });
+  rows.push(
+    `<div class="src-item"><b>Fonds de carte</b>` +
+      `<div class="hint">Natural Earth (monde, Europe) · IGN/Etalab Admin Express (France) · Eurostat NUTS (sous-régions)</div></div>`
+  );
+  rows.push(
+    `<div class="src-item"><b>Métrique</b>` +
+      `<div class="hint">Distance euclidienne sur ${state.dims} dimensions, coordonnées <i>scaled</i>. ` +
+      `Un pays prend la distance de son échantillon le plus proche.</div></div>`
+  );
+  box.innerHTML = rows.join("");
+}
+
+/** Ligne d'attribution Leaflet, construite depuis les données chargées. */
+function attributionText() {
+  const names = state.sources.map((s) => s.short || s.title);
+  return [...names, "Natural Earth", "IGN/Etalab", "Eurostat NUTS"].join(" · ");
 }
 
 function populateCountrySelect() {

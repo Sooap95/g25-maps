@@ -15,24 +15,34 @@ function paintMap() {
   for (const feat of geo.features) {
     feat.__pack = [];
     feat.__dist = null;
+    feat.__bestSample = null;
     if (target) {
       const pack = samplesForFeature(feat, samples, { diaspora });
       feat.__pack = pack;
       if (pack.length) {
         let best = Infinity;
+        let bestSample = null;
         for (const s of pack) {
           const d = euclid(target.c, s.c);
-          if (d < best) best = d;
+          if (d < best) {
+            best = d;
+            bestSample = s;
+          }
         }
         feat.__dist = best;
+        feat.__bestSample = bestSample;
         dists.push(best);
       }
     }
   }
 
+  // « Selon la carte » délègue au catalogue : rang là où la distribution est
+  // bimodale (le Monde, où l'écart Europe↔Afrique écrase tout), continue sur
+  // les cartes régionales où l'étendue est étroite et l'écart réel lisible.
+  const picked = $("rangeMode").value;
+  const mode = picked === "smart" ? spec?.scale || "auto" : picked;
   if (target && dists.length) {
-    const mode = $("rangeMode").value;
-    if (mode === "auto") {
+    if (mode === "auto" || mode === "rank") {
       state.range.min = Math.min(...dists);
       state.range.max = Math.max(...dists);
     } else if (mode === "pct") {
@@ -45,6 +55,31 @@ function paintMap() {
     $("rangeMin").value = state.range.min.toFixed(4);
     $("rangeMax").value = state.range.max.toFixed(4);
   }
+
+  // Position de chaque territoire dans la palette.
+  // « Par rang » égalise les effectifs entre bandes de couleur : indispensable
+  // sur la carte Monde, où l'écart Europe↔Afrique subsaharienne écrase sinon
+  // toute nuance intra-européenne dans une seule teinte.
+  if (mode === "rank") {
+    const sorted = [...dists].sort((a, b) => a - b);
+    const rank = new Map();
+    sorted.forEach((d, i) => {
+      if (!rank.has(d)) rank.set(d, i);
+    });
+    const span = Math.max(1, sorted.length - 1);
+    for (const feat of geo.features) {
+      feat.__t = feat.__dist == null ? null : rank.get(feat.__dist) / span;
+    }
+  } else {
+    const span = Math.max(1e-9, state.range.max - state.range.min);
+    for (const feat of geo.features) {
+      feat.__t =
+        feat.__dist == null
+          ? null
+          : Math.min(1, Math.max(0, (feat.__dist - state.range.min) / span));
+    }
+  }
+  state.rankMode = mode === "rank";
   updateLegendBar();
 
   state.layer = L.geoJSON(geo, {
@@ -55,8 +90,7 @@ function paintMap() {
         layer.setStyle({ weight: 2, color: "#f0c27a" });
         $("hoverName").textContent = name;
         $("hoverDist").textContent = feat.__dist == null ? "pas d’échantillon" : formatDist(feat.__dist);
-        if (feat.__pack?.[0]) $("hoverSample").textContent = feat.__pack[0].n;
-        else $("hoverSample").textContent = "—";
+        $("hoverSample").textContent = feat.__bestSample ? feat.__bestSample.n : "—";
       });
       layer.on("mouseout", () => layer.setStyle(styleFeature(feat)));
       layer.on("click", () => {
@@ -83,6 +117,9 @@ function renderTabs() {
       state.currentMap = m.id;
       renderTabs();
       paintMap();
+      // En mode « selon la carte », changer de carte peut changer d'échelle :
+      // les pastilles du tableau doivent suivre.
+      renderTable();
     };
     box.appendChild(b);
   }
@@ -93,22 +130,32 @@ function renderTable() {
   const body = $("tableBody");
   body.innerHTML = "";
   if (!state.distances) {
-    body.innerHTML = `<tr><td colspan="4">Analysez un profil pour voir les distances.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="5">Analysez un profil pour voir les distances.</td></tr>`;
     return;
   }
+  // Rang global, figé avant tout filtrage : une recherche ne doit pas
+  // recolorer les pastilles restantes.
+  state.distances.forEach((r, i) => (r.__i = i));
   let rows = state.distances;
   if (q) rows = rows.filter((r) => r.n.toLowerCase().includes(q) || (r.iso3 || "").toLowerCase().includes(q));
   const max = 400;
+  const span = Math.max(1e-9, state.range.max - state.range.min);
+  const rankSpan = Math.max(1, state.distances.length - 1);
   for (const r of rows.slice(0, max)) {
     const tr = document.createElement("tr");
-    const t = (r.d - state.range.min) / Math.max(1e-9, state.range.max - state.range.min);
-    const color = colorAt(paletteStops(), Math.min(1, Math.max(0, t)));
+    // La pastille suit le mode d'échelle actif, pour que tableau et carte
+    // racontent la même histoire.
+    const t = state.rankMode
+      ? r.__i / rankSpan
+      : Math.min(1, Math.max(0, (r.d - state.range.min) / span));
+    const color = colorAt(paletteStops(), t);
     tr.innerHTML = `
       <td><span class="dot" style="background:${color}"></span>${escapeHtml(r.n)}
         ${r.custom ? '<span class="badge custom">dépôt</span>' : ""}</td>
       <td class="mono">${formatDist(r.d)}</td>
       <td>${r.iso3 || "—"}</td>
-      <td>${r.role || ""}</td>`;
+      <td>${r.role || ""}</td>
+      <td class="src-cell">${escapeHtml(r.src || "—")}</td>`;
     body.appendChild(tr);
   }
   $("tableCount").textContent = `${Math.min(rows.length, max)} / ${state.distances.length}`;
