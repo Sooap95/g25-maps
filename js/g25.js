@@ -1,0 +1,117 @@
+/** Parse G25 lines and compute 25-D Euclidean distances. */
+
+const G25_DIMS = 25;
+
+function parseG25(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#") && !/^,?PC\d/i.test(l));
+
+  const out = [];
+  for (const line of lines) {
+    const parsed = parseG25Line(line);
+    if (parsed) out.push(parsed);
+  }
+  return out;
+}
+
+function parseG25Line(line) {
+  const comma = line.includes(",");
+  const parts = (comma ? line.split(",") : line.split(/\s+/)).map((s) => s.trim()).filter(Boolean);
+  if (parts.length < G25_DIMS) return null;
+
+  let name = "Target";
+  let numParts = parts;
+  const firstNum = Number(parts[0]);
+  if (parts.length >= G25_DIMS + 1 && !Number.isFinite(firstNum)) {
+    name = parts[0];
+    numParts = parts.slice(1);
+  } else if (parts.length === G25_DIMS + 1 && Number.isFinite(firstNum)) {
+    numParts = parts.slice(0, G25_DIMS);
+  }
+
+  const coords = numParts.slice(0, G25_DIMS).map(Number);
+  if (coords.length !== G25_DIMS || coords.some((n) => !Number.isFinite(n))) return null;
+  return { n: name, c: coords };
+}
+
+function euclid(a, b) {
+  let s = 0;
+  for (let i = 0; i < G25_DIMS; i++) {
+    const d = a[i] - b[i];
+    s += d * d;
+  }
+  return Math.sqrt(s);
+}
+
+function formatDist(d) {
+  if (d == null || Number.isNaN(d)) return "—";
+  return d.toFixed(6);
+}
+
+const PALETTES = {
+  "vert-rouge": ["#1a9850", "#91cf60", "#d9ef8b", "#fee08b", "#fc8d59", "#d73027"],
+  "jaune-rouge": ["#ffffb2", "#fed976", "#feb24c", "#fd8d3c", "#f03b20", "#bd0026"],
+  magma: ["#fcfdbf", "#fe9f6d", "#de4968", "#8c2981", "#3b0f70", "#000004"],
+  viridis: ["#fde725", "#7ad151", "#22a884", "#2a788e", "#414487", "#440154"],
+  ocean: ["#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#0c2c84"],
+  gris: ["#ffffff", "#d9d9d9", "#969696", "#525252", "#252525"],
+};
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ];
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function colorAt(stops, t) {
+  const x = Math.min(1, Math.max(0, t));
+  if (stops.length === 1) return stops[0];
+  const scaled = x * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(scaled));
+  const f = scaled - i;
+  const a = hexToRgb(stops[i]);
+  const b = hexToRgb(stops[i + 1]);
+  const r = Math.round(lerp(a[0], b[0], f));
+  const g = Math.round(lerp(a[1], b[1], f));
+  const bl = Math.round(lerp(a[2], b[2], f));
+  return `rgb(${r},${g},${bl})`;
+}
+
+function percentile(values, p) {
+  if (!values.length) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  const i = (s.length - 1) * p;
+  const lo = Math.floor(i);
+  const hi = Math.ceil(i);
+  if (lo === hi) return s[lo];
+  return s[lo] * (hi - i) + s[hi] * (i - lo);
+}
+
+function samplesForFeature(feat, samples, { diaspora = false } = {}) {
+  const p = feat.properties || {};
+  const specific = [];
+  const fallback = [];
+  for (const s of samples) {
+    if (!diaspora && s.role === "diaspora") continue;
+    if (matchSpecific(p, s)) specific.push(s);
+    else if (p.kind !== "country" && s.iso3 && s.iso3 === p.iso3) fallback.push(s);
+  }
+  return specific.length ? specific : fallback;
+}
+
+function matchSpecific(p, s) {
+  if (p.kind === "dept" && Array.isArray(s.fr_depts) && s.fr_depts.includes(p.insee)) return true;
+  if (p.kind === "region" && Array.isArray(s.fr_regions) && s.fr_regions.includes(p.insee)) return true;
+  if (p.nuts && Array.isArray(s.nuts) && s.nuts.includes(p.nuts)) return true;
+  if (p.kind === "country" && s.iso3 && s.iso3 === p.iso3) return true;
+  return false;
+}
