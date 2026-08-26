@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>G25 Maps — heatmap de proximité génétique</title>
+  <script>
+    (function () {
+      var p = location.pathname;
+      if (!/\/$/.test(p) && !/\.[a-z0-9]+$/i.test(p)) {
+        location.replace(p + "/" + location.search + location.hash);
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <aside>
+      <div class="brand">
+        <h1>G25 <span>Maps</span></h1>
+        <p>Heatmap de distance euclidienne en 25 dimensions. Usage personnel, calculs 100&nbsp;% locaux.</p>
+      </div>
+      <div class="side-scroll">
+        <label class="lbl">Profil cible (coller un G25 scaled)</label>
+        <textarea id="targetInput" placeholder="MonProfil_scaled,0.1280,0.1452,0.0481,..."></textarea>
+        <div class="examples">
+          <button class="chip" data-example="French_Paris">ex. Paris</button>
+          <button class="chip" data-example="French_Brittany">ex. Bretagne</button>
+          <button class="chip" data-example="French_Occitanie">ex. Occitanie</button>
+          <button class="chip" data-example="Sicilian_West">ex. Sicile</button>
+        </div>
+        <button class="btn full" id="btnAnalyze">Analyser</button>
+        <button class="btn ghost full" id="btnReset">Réinitialiser la carte</button>
+        <p class="hint">Format Vahaduo&nbsp;: <span class="mono">Nom,PC1,…,PC25</span>. Utilisez des coordonnées <b>scaled</b>, comme la base.</p>
+
+        <div class="stats">
+          <div class="stat"><b id="targetName">—</b><span>cible</span></div>
+          <div class="stat"><b id="statBest">—</b><span>plus proche</span></div>
+          <div class="stat"><b id="statBestD">—</b><span>distance</span></div>
+          <div class="stat"><b id="statN">—</b><span>échantillons</span></div>
+        </div>
+
+        <label class="lbl">Palette</label>
+        <select id="palette">
+          <option value="vert-rouge">Vert → rouge</option>
+          <option value="jaune-rouge">Jaune → rouge</option>
+          <option value="magma">Magma</option>
+          <option value="viridis">Viridis</option>
+          <option value="ocean">Océan</option>
+          <option value="gris">Gris</option>
+        </select>
+        <label class="lbl">Échelle du dégradé</label>
+        <select id="rangeMode">
+          <option value="auto">Auto (min–max de la carte)</option>
+          <option value="pct">Percentiles 2–98</option>
+          <option value="manual">Manuelle</option>
+        </select>
+        <div class="row" style="margin-top:8px">
+          <input id="rangeMin" type="number" step="0.001" value="0" disabled>
+          <input id="rangeMax" type="number" step="0.001" value="0.12" disabled>
+        </div>
+        <div class="legend" id="legendBar"></div>
+        <div class="legend-scale"><span id="legMin">proche</span><span id="legMax">loin</span></div>
+        <label class="hint" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+          <input id="includeDiaspora" type="checkbox" style="width:auto">
+          Inclure les diasporas (Ashkénazes, Roma, communautés juives…)
+        </label>
+
+        <div class="stats">
+          <div class="stat"><b id="hoverName">—</b><span>territoire</span></div>
+          <div class="stat"><b id="hoverDist">—</b><span>distance</span></div>
+        </div>
+        <p class="hint">Échantillon utilisé&nbsp;: <b id="hoverSample">—</b></p>
+        <p class="hint"><b id="statCustom">0</b> source(s) ajoutée(s) par dépôt.</p>
+
+        <details class="block" open>
+          <summary>Déposer des sources G25</summary>
+          <div class="inner">
+            <p class="hint">Collez une ou plusieurs lignes. Elles restent dans ce navigateur et colorent les cartes si un pays / une région est renseigné.</p>
+            <textarea id="depositInput" placeholder="Occitanie_perso_scaled,0.12,..."></textarea>
+            <label class="lbl">Pays</label>
+            <select id="depIso"></select>
+            <div class="row">
+              <div>
+                <label class="lbl">Région FR</label>
+                <select id="depRegion"></select>
+              </div>
+              <div>
+                <label class="lbl">Dépt. (ex. 31)</label>
+                <input id="depDept" maxlength="3" placeholder="31">
+              </div>
+            </div>
+            <label class="lbl">NUTS (optionnel, ex. ES51)</label>
+            <input id="depNuts" placeholder="ITC4, ITH3">
+            <label class="lbl">Rôle</label>
+            <select id="depRole">
+              <option value="regional">régional</option>
+              <option value="national">national</option>
+              <option value="ethnic">ethnique</option>
+              <option value="diaspora">diaspora</option>
+            </select>
+            <label class="lbl">Notes</label>
+            <input id="depNotes" placeholder="source, année…">
+            <button class="btn full" id="btnAddDeposit">Ajouter à la base</button>
+            <div class="drop" id="dropZone">Glissez un .txt Vahaduo ou un .json d’export</div>
+            <input id="fileImport" type="file" accept=".txt,.csv,.json">
+            <div class="row" style="margin-top:8px">
+              <button class="btn ghost" id="btnExportJson">Export JSON</button>
+              <button class="btn ghost" id="btnExportTxt">Export TXT</button>
+            </div>
+            <button class="btn ghost danger full" id="btnClearDeposits">Vider les dépôts navigateur</button>
+            <div class="deposit-list" id="depositList"></div>
+            <p class="hint">Fichier projet optionnel&nbsp;: <code>data/deposits.json</code> est chargé au démarrage.</p>
+          </div>
+        </details>
+      </div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <div class="map-tabs" id="mapTabs"></div>
+        <span class="spacer"></span>
+        <button class="btn ghost" id="btnPng">PNG</button>
+      </div>
+      <div id="map"></div>
+      <section class="table-wrap">
+        <div class="table-bar">
+          <h2>Table des distances</h2>
+          <input id="tableSearch" placeholder="Filtrer un nom…">
+          <span class="hint" id="tableCount"></span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Échantillon</th>
+                <th>Distance</th>
+                <th>Pays</th>
+                <th>Rôle</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="js/g25.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
