@@ -27,21 +27,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Enable Pages (workflow source)
-        continue-on-error: true
-        uses: actions/github-script@v7
-        with:
-          script: |
-            try {
-              await github.rest.repos.createPagesSite({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                build_type: "workflow",
-              });
-            } catch (error) {
-              core.info(String(error.message || error));
-            }
-
       - name: Fetch G25 + GeoJSON and build maps
         run: |
           mkdir -p data/geo data/maps
@@ -64,6 +49,8 @@ jobs:
           python3 tests/test_data.py
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Pack site
         run: |
