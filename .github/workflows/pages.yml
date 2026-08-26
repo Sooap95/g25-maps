@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - uses: actions/setup-python@v5
         with:
@@ -53,6 +55,18 @@ jobs:
           rm -rf _site/data/geo _site/data/g25_modern_scaled.txt _site/data/deposits
           find _site -name '.DS_Store' -delete
           find _site -name 'build_data*.py' -delete
+
+      - name: Commit maps to main (Pages sert cette branche)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/samples.json data/maps/*.geojson data/maps/catalog.json
+          if git diff --cached --quiet; then
+            echo "no map changes"
+          else
+            git commit -m "ci: publier cartes G25 [skip ci]"
+            git push origin HEAD:main
+          fi
 
       - name: Publish gh-pages
         uses: peaceiris/actions-gh-pages@v4
