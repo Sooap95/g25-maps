@@ -14,6 +14,10 @@ const state = {
   dims: 25,
   rankMode: false,
   admix: null,
+  datasets: [],
+  datasetCache: {},
+  currentDataset: null,
+  attribution: "",
 };
 
 const FR_REGIONS = [

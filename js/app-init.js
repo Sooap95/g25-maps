@@ -62,15 +62,26 @@ async function init() {
   });
   L.control.attribution({ prefix: false }).addTo(state.map);
 
-  const [catalog, sampleData] = await Promise.all([
+  const [catalog, sampleData, dsIndex] = await Promise.all([
     loadJson("data/maps/catalog.json"),
     loadJson("data/samples.json"),
+    // L'inventaire est optionnel : sans lui l'app retombe sur samples.json seul,
+    // ce qui garde une version deployee avant les jeux multiples fonctionnelle.
+    loadJson("data/datasets/index.json").catch(() => null),
   ]);
   state.catalog = catalog;
   state.samples = sampleData.samples;
   state.sources = normalizeSources(sampleData.sources || sampleData.source);
   state.dims = sampleData.dims || 25;
-  state.map.attributionControl.addAttribution(attributionText());
+  state.attribution = attributionText();
+  state.map.attributionControl.addAttribution(state.attribution);
+
+  state.datasets = dsIndex?.datasets || [];
+  const def = state.datasets.find((d) => d.default) || state.datasets[0];
+  if (def) {
+    state.currentDataset = def.id;
+    state.datasetCache[def.id] = sampleData;
+  }
   await Promise.all(
     catalog.maps.map(async (m) => {
       state.geo[m.id] = await loadJson(m.file);
@@ -86,6 +97,14 @@ async function init() {
 
   populateCountrySelect();
   renderSources();
+  if (state.datasets.length) {
+    renderDatasetSelect();
+    describeDataset(state.datasets.find((d) => d.id === state.currentDataset));
+    $("dataset").onchange = () => selectDataset($("dataset").value);
+  } else {
+    $("dataset").closest("label, div")?.remove?.();
+    $("dataset").style.display = "none";
+  }
   renderTabs();
   renderDepositList();
   paintMap();

@@ -152,6 +152,76 @@ function attributionText() {
   return [...names, "Natural Earth", "IGN/Etalab", "Eurostat NUTS"].join(" · ");
 }
 
+/**
+ * Bascule de jeu de données.
+ *
+ * Les jeux ne sont pas chargés d'avance : les anciens pèsent 1,6 Mo, et tout
+ * charger au démarrage coûterait plusieurs secondes pour des données que
+ * l'utilisateur ne consultera peut-être jamais. On ne récupère donc que le jeu
+ * sélectionné, et on garde en mémoire ceux déjà vus.
+ */
+async function selectDataset(id, { keepTarget = true } = {}) {
+  const spec = state.datasets.find((d) => d.id === id);
+  if (!spec) return;
+
+  const sel = $("dataset");
+  sel.disabled = true;
+  $("datasetHint").textContent = "Chargement…";
+
+  try {
+    let doc = state.datasetCache[id];
+    if (!doc) {
+      doc = await loadJson(spec.file);
+      state.datasetCache[id] = doc;
+    }
+    state.currentDataset = id;
+    state.samples = doc.samples;
+    state.sources = normalizeSources(doc.sources || doc.source);
+    state.dims = doc.dims || 25;
+
+    state.map.attributionControl.removeAttribution(state.attribution);
+    state.attribution = attributionText();
+    state.map.attributionControl.addAttribution(state.attribution);
+
+    renderSources();
+    populateCountrySelect();
+    $("statN").textContent = String(allSamples().length);
+    describeDataset(spec);
+
+    // Le modèle d'admixture porte sur l'ancien jeu : il ne veut plus rien dire.
+    state.admix = null;
+    $("admixResult").innerHTML = `<p class="hint">Relancez le calcul sur ce jeu.</p>`;
+
+    if (keepTarget && state.target) analyze();
+    else {
+      paintMap();
+      renderTable();
+    }
+  } catch (e) {
+    toast("Chargement impossible : " + (e && e.message ? e.message : e));
+    $("datasetHint").textContent = "Échec du chargement.";
+  } finally {
+    sel.disabled = false;
+  }
+}
+
+function describeDataset(spec) {
+  const pct = spec.count ? Math.round((100 * spec.tagged) / spec.count) : 0;
+  $("datasetHint").textContent =
+    `${spec.count.toLocaleString("fr-FR")} échantillons · ${pct} % localisables sur la carte. ` +
+    (spec.kind === "ancient"
+      ? "Jeu ancien : les distances se lisent par rapport à des populations disparues."
+      : "");
+}
+
+function renderDatasetSelect() {
+  const sel = $("dataset");
+  sel.innerHTML = state.datasets
+    .map((d) => `<option value="${escapeHtml(d.id)}">${escapeHtml(d.short || d.title)}</option>`)
+    .join("");
+  sel.value = state.currentDataset;
+}
+
 function populateCountrySelect() {
   const sel = $("depIso");
   const names = new Map();

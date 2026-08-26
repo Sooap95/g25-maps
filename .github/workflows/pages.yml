@@ -54,8 +54,7 @@ jobs:
       - name: Post-traitement des donnees
         run: |
           python3 scripts/build_world_50m.py
-          python3 scripts/tag_iso3.py
-          python3 scripts/set_sources.py
+          python3 scripts/build_datasets.py
 
       - name: Tests
         run: python3 tests/test_data.py
@@ -73,7 +72,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/samples.json data/maps/*.geojson data/maps/catalog.json
+          git add -f data/samples.json data/maps/*.geojson data/maps/catalog.json data/datasets
           if git diff --cached --quiet; then
             echo "no map changes"
           else
