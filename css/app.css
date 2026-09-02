@@ -1,0 +1,610 @@
+:root {
+  --bg: #0c0f12;
+  --bg-2: #13181d;
+  --bg-3: #1a2128;
+  --line: #2a343e;
+  --text: #e7ecf1;
+  --muted: #8b98a5;
+  --copper: #d4a054;
+  --copper-2: #f0c27a;
+  --close: #6ee7b7;
+  --far: #fb7185;
+  --warn: #fbbf24;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --sidebar: 360px;
+  --radius: 10px;
+  --font: "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "Cascadia Code", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#app {
+  display: grid;
+  grid-template-columns: var(--sidebar) 1fr;
+  height: 100%;
+}
+
+aside {
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.brand {
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.brand h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+.brand h1 span { color: var(--copper); }
+.brand p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.side-scroll {
+  overflow: auto;
+  padding: 14px 16px 24px;
+  flex: 1;
+}
+
+label.lbl {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+textarea, input, select {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: 13px/1.4 var(--mono);
+}
+textarea { min-height: 96px; resize: vertical; }
+textarea:focus, input:focus, select:focus {
+  outline: 1px solid var(--copper);
+  border-color: var(--copper);
+}
+
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font: 600 13px var(--font);
+  cursor: pointer;
+  background: var(--copper);
+  color: #1a1208;
+}
+.btn:hover { background: var(--copper-2); }
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.btn.ghost:hover { border-color: var(--copper); color: var(--copper-2); }
+.btn.danger { background: #7f1d1d; color: #fecaca; }
+.btn.full { width: 100%; margin-top: 8px; }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--copper); color: var(--copper-2); }
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.stat {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.stat b { display: block; font-size: 14px; color: var(--copper-2); }
+.stat span { font-size: 11px; color: var(--muted); }
+
+details.block {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+details.block > summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+details.block > summary::-webkit-details-marker { display: none; }
+details.block > .inner { padding: 0 12px 12px; }
+details.block[open] > summary { color: var(--copper-2); }
+
+.legend {
+  height: 12px;
+  border-radius: 99px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+}
+.legend-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* Colonne souple plutot qu'une grille a rangees fixes : le bandeau de couverture
+   apparait et disparait selon le jeu de donnees, et une grille decalerait alors
+   la carte d'une rangee. */
+main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  flex-wrap: wrap;
+}
+
+.map-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.map-tabs button {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font: 600 12px var(--font);
+  cursor: pointer;
+}
+.map-tabs button:hover { color: var(--text); }
+.map-tabs button.active {
+  color: #1a1208;
+  background: var(--copper);
+}
+
+.toolbar .spacer { flex: 1; }
+#map {
+  background: #0a0d10;
+  flex: 1;
+  min-height: 0;
+}
+.leaflet-container { background: #0a0d10; font-family: var(--font); }
+.leaflet-control-attribution {
+  background: rgba(12, 15, 18, 0.82) !important;
+  color: var(--muted) !important;
+  font-size: 10px;
+  padding: 2px 6px;
+  max-width: 60vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.leaflet-control-zoom a {
+  background: var(--bg-3) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+}
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.leaflet-popup-content { margin: 10px 12px; font-size: 13px; }
+.leaflet-popup-content b { color: var(--copper-2); }
+
+.table-wrap {
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+  max-height: 34vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+.table-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.table-bar h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.table-bar input { max-width: 260px; padding: 6px 8px; }
+.table-scroll { overflow: auto; flex: 1; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); }
+th { position: sticky; top: 0; background: var(--bg-3); color: var(--muted); font-weight: 650; }
+td.mono { font-family: var(--mono); }
+tr:hover td { background: rgba(212, 160, 84, 0.08); }
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 1px solid rgba(255,255,255,.25);
+}
+.badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.badge.custom { border-color: var(--copper); color: var(--copper-2); }
+
+.toast {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  background: var(--bg-3);
+  border: 1px solid var(--copper);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  z-index: 4000;
+  display: none;
+}
+
+.drop {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.drop.over { border-color: var(--copper); color: var(--copper-2); background: rgba(212,160,84,.08); }
+input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+
+.deposit-list { max-height: 180px; overflow: auto; margin-top: 8px; font-size: 12px; }
+.deposit-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.deposit-list button { background: none; border: 0; color: var(--far); cursor: pointer; }
+
+/* Modélisation d'admixture */
+#admixResult { margin-top: 10px; }
+.admix-row { margin-bottom: 8px; }
+.admix-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.admix-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admix-head b { color: var(--copper-2); flex: none; }
+.admix-bar {
+  height: 6px;
+  background: var(--bg-3);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 3px;
+}
+.admix-bar i { display: block; height: 100%; border-radius: 99px; }
+.admix-fit {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.admix-fit b { color: var(--copper-2); }
+
+/* Panneau « Sources des données » */
+.src-item { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.src-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.src-item b { font-size: 12px; color: var(--copper-2); }
+.src-item .hint { margin-top: 3px; }
+.src-item a { color: var(--copper); overflow-wrap: anywhere; }
+.src-item a:hover { color: var(--copper-2); }
+
+/* Crédit de source en pied de popup Leaflet */
+.src-credit {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+
+/* Colonne Source du tableau : secondaire, ne doit pas voler la vedette */
+td.src-cell {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ----------------------------------------------------------------- etapes */
+/* Le panneau melangeait l'action principale et huit reglages d'expert. Les
+   etapes numerotees remettent « coller un profil » devant, et renvoient le
+   reste dans des blocs replies. */
+.step { margin-bottom: 6px; }
+.step + .step { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
+.step > h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+.step > h2 i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--copper);
+  color: #1a1208;
+  font: 700 11px var(--font);
+  font-style: normal;
+  flex: none;
+}
+details.block.help > summary { color: var(--muted); font-weight: 500; }
+
+.stat.wide { grid-column: span 2; }
+.stat b { overflow-wrap: anywhere; }
+
+/* ------------------------------------------------------------- pastilles */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip.toggle { transition: opacity .12s, border-color .12s; }
+.chip.toggle.off { opacity: 0.4; text-decoration: line-through; }
+.chip.toggle.on { border-color: var(--copper); color: var(--copper-2); }
+
+input[type="range"] { padding: 0; background: none; border: 0; accent-color: var(--copper); }
+
+/* ---------------------------------------------------------------- onglets */
+/* Carte que le vivier courant ne couvre pas assez pour dire quoi que ce soit :
+   visible, pour qu'on sache qu'elle existe, mais hors d'atteinte. */
+.map-tabs button.unavailable {
+  opacity: 0.34;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.map-tabs button.unavailable.active { opacity: 0.8; cursor: pointer; }
+.map-tabs button.unavailable:hover { color: var(--muted); }
+.btn.small { padding: 5px 9px; font-size: 12px; }
+
+.map-note {
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.map-note.warn { color: var(--warn); }
+.warn-text { color: var(--warn); }
+
+label.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+label.check input { width: auto; flex: none; }
+
+/* ------------------------------------------------------------------ frise */
+.timeline {
+  padding: 8px 12px 10px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.tl-head .spacer { flex: 1; }
+.tl-range { color: var(--copper-2); font-family: var(--mono); }
+/* Les deux curseurs partagent une piste : superposes, ils delimitent un
+   intervalle sans qu'il faille ecrire un composant de glissement complet. */
+.tl-sliders { position: relative; height: 22px; }
+.tl-sliders input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+}
+.tl-sliders input::-webkit-slider-thumb { pointer-events: auto; }
+.tl-sliders input::-moz-range-thumb { pointer-events: auto; }
+.tl-marks {
+  position: relative;
+  height: 16px;
+  margin-top: 2px;
+  font-size: 9px;
+}
+.tl-mark {
+  position: absolute;
+  top: 0;
+  height: 14px;
+  line-height: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #0c0f12;
+  opacity: 0.8;
+}
+.tl-paleo, .tl-meso { background: #6b7280; }
+.tl-neo { background: #84cc16; }
+.tl-chalco { background: #f59e0b; }
+.tl-bronze { background: #d97706; }
+.tl-iron { background: #94a3b8; }
+.tl-antiq { background: #f472b6; }
+.tl-migr { background: #a78bfa; }
+.tl-medieval { background: #60a5fa; }
+.tl-modern { background: #34d399; }
+
+/* --------------------------------------------------------- interpolation */
+.idw-canvas { position: absolute; pointer-events: none; z-index: 200; }
+
+/* ---------------------------------------------------------------- tableau */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--text); }
+th.sorted-asc::after { content: " ▲"; color: var(--copper); }
+th.sorted-desc::after { content: " ▼"; color: var(--copper); }
+tbody tr { cursor: pointer; }
+
+/* --------------------------------------------------------------- chargement */
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  background: var(--bg);
+  color: var(--muted);
+  z-index: 5000;
+  font-size: 13px;
+}
+.loading[hidden] { display: none; }
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--line);
+  border-top-color: var(--copper);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.hint.busy { color: var(--copper-2); }
+
+/* --------------------------------------------------------------- mobile */
+/* L'ancienne regle donnait 42 vh au panneau et le reste a la carte : sur un
+   telephone la carte tombait a une bande de quelques dizaines de pixels, et
+   `overflow: hidden` sur body empechait meme de faire defiler. La carte reste
+   desormais collee en haut, le panneau defile dessous. */
+@media (max-width: 900px) {
+  html, body { height: auto; overflow: auto; }
+  /* Colonne, et la carte remontee en tete : dans le flux du document le
+     panneau vient en premier, ce qui reléguerait la carte sous un ecran
+     entier de reglages. */
+  #app { display: flex; flex-direction: column; height: auto; }
+  main {
+    order: -1;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    height: 62vh;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg);
+  }
+  aside {
+    border-right: 0;
+    height: auto;
+    min-height: 0;
+  }
+  .side-scroll { overflow: visible; height: auto; }
+  .table-wrap { max-height: 26vh; min-height: 90px; }
+  .table-bar input { max-width: 140px; }
+  /* Les onglets defilent lateralement plutot que de passer a la ligne :
+     sur un telephone, deux rangees d'onglets mangeaient un quart de la carte. */
+  .toolbar { padding: 6px 8px; flex-wrap: nowrap; }
+  .map-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .map-tabs::-webkit-scrollbar { display: none; }
+  .map-tabs button { padding: 5px 9px; font-size: 11px; white-space: nowrap; }
+  main { height: 70vh; }
+  .table-wrap { max-height: 22vh; }
+  th:nth-child(6), td:nth-child(6) { display: none; }
+}
+
+@media (max-width: 560px) {
+  th:nth-child(4), td:nth-child(4) { display: none; }
+  .stats { grid-template-columns: 1fr; }
+  .stat.wide { grid-column: span 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
