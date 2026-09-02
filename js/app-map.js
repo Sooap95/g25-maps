@@ -18,6 +18,9 @@ const state = {
   datasetCache: {},
   currentDataset: null,
   attribution: "",
+  // Couverture (jeu de données × carte), calculée à la demande et mémorisée :
+  // elle ne dépend pas du profil analysé, seulement des données chargées.
+  coverage: {},
 };
 
 const FR_REGIONS = [
@@ -88,7 +91,7 @@ function fitMap(spec) {
   );
 }
 
-function popupHtml(name, pack, dist) {
+function popupHtml(name, pack, dist, approx = false) {
   const rows = pack
     .map((s) => ({ s, d: euclid(state.target.c, s.c) }))
     .sort((a, b) => a.d - b.d)
@@ -100,7 +103,10 @@ function popupHtml(name, pack, dist) {
     .join("");
   const src = pack.length ? sourceLabel(pack[0]) : "";
   const credit = src ? `<div class="hint src-credit">source&nbsp;: ${escapeHtml(src)}</div>` : "";
-  return `<b>${escapeHtml(name)}</b><div class="hint">distance ${formatDist(dist)}</div>${rows}${credit}`;
+  const warn = approx
+    ? `<div class="hint warn-text">Aucun échantillon propre à ce territoire : valeur empruntée à la moyenne du pays, identique pour toutes ses subdivisions.</div>`
+    : "";
+  return `<b>${escapeHtml(name)}</b><div class="hint">distance ${formatDist(dist)}</div>${warn}${rows}${credit}`;
 }
 
 function styleFeature(feat) {
@@ -108,14 +114,28 @@ function styleFeature(feat) {
     return {
       color: "#3a4652",
       weight: 0.7,
+      dashArray: null,
       fillColor: "#1b232b",
       fillOpacity: 0.85,
+    };
+  }
+  // Un territoire qui emprunte la moyenne de son pays est dessiné en retrait —
+  // même teinte, mais délavée et bordée de pointillés — pour qu'on ne le lise
+  // pas comme une mesure locale.
+  if (feat.__approx) {
+    return {
+      color: "#5b6774",
+      weight: 0.7,
+      dashArray: "3 3",
+      fillColor: colorAt(paletteStops(), feat.__t ?? 0),
+      fillOpacity: 0.35,
     };
   }
   // __t est calculé dans paintMap : linéaire pour auto/pct/manual, rang sinon.
   return {
     color: "#0c0f12",
     weight: 0.8,
+    dashArray: null,
     fillColor: colorAt(paletteStops(), feat.__t ?? 0),
     fillOpacity: 0.92,
   };

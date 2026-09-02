@@ -27,11 +27,55 @@ function analyze() {
   } catch (_) {}
 }
 
-function fillExample(name) {
-  const s = state.samples.find((x) => x.n === name);
-  if (!s) return;
-  $("targetInput").value = `${s.n},${s.c.join(",")}`;
-  analyze();
+/**
+ * Profils de démonstration.
+ *
+ * Ils étaient jusqu'ici codés en dur sur des noms d'échantillons (`French_Paris`)
+ * qui n'existent plus depuis le changement de jeu de données : les boutons ne
+ * faisaient plus rien, et un visiteur sans coordonnées G25 n'avait aucun moyen
+ * d'essayer l'outil. On les cherche donc par motif dans le jeu chargé, et on
+ * n'affiche que ceux qui y ont trouvé quelque chose.
+ */
+const EXAMPLE_HINTS = [
+  { label: "Paris", find: /ile-de-france_paris/i },
+  { label: "Bretagne", find: /^breton_finistere/i },
+  { label: "Occitanie", find: /occitan_occitanie_haute-garonne/i },
+  { label: "Sicile", find: /^italian_sicily_\(/i },
+  { label: "Gaulois", find: /_IA:/ },
+  { label: "Âge du Fer", find: /^(france|gaul)/i },
+];
+
+function renderExamples() {
+  const box = $("examples");
+  if (!box) return;
+  const picked = [];
+  for (const hint of EXAMPLE_HINTS) {
+    if (picked.length >= 4) break;
+    const s = state.samples.find((x) => hint.find.test(x.n) && !picked.some((p) => p.s === x));
+    if (s) picked.push({ label: hint.label, s });
+  }
+  // Aucun motif ne colle (jeu inattendu) : on prend les premiers échantillons,
+  // pour qu'il reste toujours un moyen d'essayer l'outil en un clic.
+  if (!picked.length) {
+    for (const s of state.samples.slice(0, 3)) picked.push({ label: shortName(s.n), s });
+  }
+  box.innerHTML = "";
+  for (const { label, s } of picked) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = `ex. ${label}`;
+    b.title = s.n;
+    b.onclick = () => {
+      $("targetInput").value = `${s.n},${s.c.join(",")}`;
+      analyze();
+    };
+    box.appendChild(b);
+  }
+}
+
+/** Étiquette lisible tirée d'un nom d'échantillon G25. */
+function shortName(n) {
+  return String(n).replace(/_\(n=\d+\)$/, "").replace(/_/g, " ").slice(0, 24);
 }
 
 function assetUrl(rel) {
@@ -178,6 +222,7 @@ async function selectDataset(id, { keepTarget = true } = {}) {
     state.samples = doc.samples;
     state.sources = normalizeSources(doc.sources || doc.source);
     state.dims = doc.dims || 25;
+    resetCoverage();
 
     state.map.attributionControl.removeAttribution(state.attribution);
     state.attribution = attributionText();
@@ -185,12 +230,19 @@ async function selectDataset(id, { keepTarget = true } = {}) {
 
     renderSources();
     populateCountrySelect();
+    renderExamples();
     $("statN").textContent = String(allSamples().length);
     describeDataset(spec);
 
     // Le modèle d'admixture porte sur l'ancien jeu : il ne veut plus rien dire.
     state.admix = null;
     $("admixResult").innerHTML = `<p class="hint">Relancez le calcul sur ce jeu.</p>`;
+
+    // Toutes les cartes ne survivent pas au changement de jeu : « Gaulois »
+    // ne documente aucun département, « Âge du Fer Europe » aucune région.
+    const moved = ensureUsableMap();
+    renderTabs();
+    if (moved) toast(`« ${moved.from} » n’est pas couvert par ce jeu — passage à « ${moved.to} ».`);
 
     if (keepTarget && state.target) analyze();
     else {
@@ -207,11 +259,17 @@ async function selectDataset(id, { keepTarget = true } = {}) {
 
 function describeDataset(spec) {
   const pct = spec.count ? Math.round((100 * spec.tagged) / spec.count) : 0;
+  const diaspora = $("includeDiaspora").checked;
+  const usable = state.catalog.maps.filter((m) => mapIsUsable(coverageFor(m.id, diaspora)));
+  const scope = usable.length
+    ? `Cartes exploitables : ${usable.map((m) => m.title).join(", ")}.`
+    : "Aucune carte n’est assez couverte par ce jeu ; la table des distances reste utilisable.";
   $("datasetHint").textContent =
-    `${spec.count.toLocaleString("fr-FR")} échantillons · ${pct} % localisables sur la carte. ` +
+    `${spec.count.toLocaleString("fr-FR")} échantillons · ${pct} % localisables. ` +
     (spec.kind === "ancient"
-      ? "Jeu ancien : les distances se lisent par rapport à des populations disparues."
-      : "");
+      ? "Jeu ancien : les distances se lisent par rapport à des populations disparues. "
+      : "") +
+    scope;
 }
 
 function renderDatasetSelect() {

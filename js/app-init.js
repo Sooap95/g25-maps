@@ -33,9 +33,8 @@ async function importDepositFile(file) {
     await saveDeposits(recs);
     state.deposits = await listDeposits();
     renderDepositList();
-    $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
+    refreshAfterDeposits();
     toast(`${recs.length} source(s) importée(s).`);
-    if (state.target) analyze();
     return;
   }
   await addDepositsFromText(text);
@@ -97,15 +96,19 @@ async function init() {
 
   populateCountrySelect();
   renderSources();
+  renderExamples();
   if (state.datasets.length) {
     renderDatasetSelect();
-    describeDataset(state.datasets.find((d) => d.id === state.currentDataset));
     $("dataset").onchange = () => selectDataset($("dataset").value);
   } else {
     $("dataset").closest("label, div")?.remove?.();
     $("dataset").style.display = "none";
   }
+  ensureUsableMap();
   renderTabs();
+  if (state.datasets.length) {
+    describeDataset(state.datasets.find((d) => d.id === state.currentDataset));
+  }
   renderDepositList();
   paintMap();
 
@@ -142,7 +145,15 @@ async function init() {
     if ($("rangeMode").value === "manual" && state.target) paintMap();
   };
   $("includeDiaspora").onchange = () => {
+    // Les diasporas changent la couverture de chaque carte : certaines
+    // deviennent exploitables, d'autres non.
+    ensureUsableMap();
+    renderTabs();
     if (state.target) analyze();
+    else paintMap();
+  };
+  $("nationalFallback").onchange = () => {
+    if (state.target) paintMap();
   };
   $("tableSearch").oninput = renderTable;
   $("btnPng").onclick = downloadPng;
@@ -151,10 +162,6 @@ async function init() {
   $("admixK").onchange = () => {
     if (state.admix) runAdmixture();
   };
-
-  document.querySelectorAll("[data-example]").forEach((el) => {
-    el.onclick = () => fillExample(el.dataset.example);
-  });
 
   $("btnAddDeposit").onclick = () =>
     addDepositsFromText($("depositInput").value, {
@@ -173,8 +180,7 @@ async function init() {
     await clearDeposits();
     state.deposits = [];
     renderDepositList();
-    $("statCustom").textContent = String(state.fileDeposits.length);
-    if (state.target) analyze();
+    refreshAfterDeposits();
   };
   $("fileImport").onchange = (e) => {
     const f = e.target.files?.[0];

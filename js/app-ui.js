@@ -1,3 +1,16 @@
+/**
+ * Un dépôt peut rendre une carte exploitable — ou cesser de la rendre telle.
+ * À appeler après toute modification de la base locale.
+ */
+function refreshAfterDeposits() {
+  resetCoverage();
+  ensureUsableMap();
+  renderTabs();
+  $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
+  if (state.target) analyze();
+  else paintMap();
+}
+
 function renderDepositList() {
   const box = $("depositList");
   if (!state.deposits.length) {
@@ -15,8 +28,7 @@ function renderDepositList() {
       await deleteDeposit(b.dataset.id);
       state.deposits = await listDeposits();
       renderDepositList();
-      $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
-      if (state.target) analyze();
+      refreshAfterDeposits();
     };
   });
 }
@@ -42,9 +54,8 @@ async function addDepositsFromText(text, meta = {}) {
   await saveDeposits(recs);
   state.deposits = await listDeposits();
   renderDepositList();
-  $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
+  refreshAfterDeposits();
   toast(`${recs.length} source(s) ajoutée(s) à la base locale.`);
-  if (state.target) analyze();
   return recs.length;
 }
 

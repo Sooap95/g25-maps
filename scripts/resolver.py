@@ -11,6 +11,10 @@ MAPS = str(pathlib.Path(__file__).resolve().parent.parent / "data" / "maps") + "
 def fold(s):
     s = unicodedata.normalize("NFKD", str(s))
     s = "".join(c for c in s if not unicodedata.combining(c))
+    # Les etiquettes G25 collent parfois les mots d'un toponyme : « GrandEst »,
+    # « PaysDeLaLoire ». Sans cette coupure, aucun ne rejoint le nom porte par
+    # le fond de carte, et 34 Gaulois du Grand Est restaient hors carte.
+    s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
     s = s.lower().replace("'", " ")
     return re.sub(r"[^a-z0-9]+", " ", s).strip()
 
@@ -89,6 +93,16 @@ class Resolver:
 
     def french(self, label):
         h = fold(label)
-        reg = next((i for n, i in self._r if self._has(h, n)), None)
-        dep = next((i for n, i in self._d if self._has(h, n)), None)
+        reg_name, reg = next(((n, i) for n, i in self._r if self._has(h, n)), (None, None))
+        dep = None
+        for name, code in self._d:
+            if not self._has(h, name):
+                continue
+            # « Pays de la Loire » contient « Loire » : sans ce garde-fou, la
+            # region designerait a elle seule un departement qu'aucune etiquette
+            # ne mentionne.
+            if reg_name and self._has(reg_name, name):
+                continue
+            dep = code
+            break
         return reg, dep

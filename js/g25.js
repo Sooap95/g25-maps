@@ -111,23 +111,36 @@ const ISO_FALLBACK = {
   KOS: "ALB", // Kosovo, très majoritairement albanophone
 };
 
-function samplesForFeature(feat, samples, { diaspora = false } = {}) {
+/**
+ * Échantillons qu'un territoire peut légitimement revendiquer, et à quel titre.
+ *
+ * Trois provenances possibles, volontairement distinguées :
+ *  - `specific` : l'échantillon est rattaché à ce territoire précis
+ *    (département, région, NUTS, ou pays sur une carte de pays) ;
+ *  - `alias`    : substitution documentée entre territoires génétiquement
+ *    indissociables (voir ISO_FALLBACK) ;
+ *  - `national` : le territoire n'a rien à lui et emprunte les échantillons de
+ *    son pays. Toutes les subdivisions du pays prennent alors la même valeur —
+ *    celle de son meilleur échantillon —, si bien qu'une région sans donnée
+ *    apparaît aussi proche que la mieux documentée, voire plus. C'est une carte
+ *    lisse et fausse : ce repli est donc optionnel, et signalé quand il sert.
+ */
+function samplesForFeature(feat, samples, { diaspora = false, national = false } = {}) {
   const p = feat.properties || {};
-  const specific = [];
-  const fallback = [];
-  for (const s of samples) {
-    if (!diaspora && s.role === "diaspora") continue;
-    if (matchSpecific(p, s)) specific.push(s);
-    else if (p.kind !== "country" && s.iso3 && s.iso3 === p.iso3) fallback.push(s);
-  }
-  if (specific.length) return specific;
-  if (fallback.length) return fallback;
+  const keep = (s) => diaspora || s.role !== "diaspora";
+
+  const specific = samples.filter((s) => keep(s) && matchSpecific(p, s));
+  if (specific.length) return { pack: specific, source: "specific" };
 
   const alias = ISO_FALLBACK[p.iso3];
-  if (!alias) return [];
-  return samples.filter(
-    (s) => (diaspora || s.role !== "diaspora") && s.iso3 === alias
-  );
+  if (alias) {
+    const sub = samples.filter((s) => keep(s) && s.iso3 === alias);
+    if (sub.length) return { pack: sub, source: "alias" };
+  }
+
+  if (!national || p.kind === "country" || !p.iso3) return { pack: [], source: "none" };
+  const pack = samples.filter((s) => keep(s) && s.iso3 === p.iso3);
+  return pack.length ? { pack, source: "national" } : { pack: [], source: "none" };
 }
 
 function matchSpecific(p, s) {
@@ -136,4 +149,39 @@ function matchSpecific(p, s) {
   if (p.nuts && Array.isArray(s.nuts) && s.nuts.includes(p.nuts)) return true;
   if (p.kind === "country" && s.iso3 && s.iso3 === p.iso3) return true;
   return false;
+}
+
+/**
+ * Ce qu'une carte peut réellement montrer d'un jeu de données donné.
+ *
+ * `distinct` est la mesure qui compte : le nombre de couleurs différentes que
+ * la carte est capable de produire. C'est lui qui trahit l'aplat uniforme —
+ * les 96 départements français peints d'une seule teinte parce que le jeu
+ * « Gaulois » n'en documente aucun — là où `specific` seul ne dirait rien.
+ */
+function mapCoverage(geo, samples, { diaspora = false } = {}) {
+  let specific = 0;
+  let approx = 0;
+  const packs = new Set();
+  for (const feat of geo.features) {
+    const { pack, source } = samplesForFeature(feat, samples, { diaspora, national: true });
+    if (!pack.length) continue;
+    if (source === "national") {
+      approx++;
+    } else {
+      specific++;
+      packs.add(pack.map((s) => s.n).join(""));
+    }
+  }
+  return { features: geo.features.length, specific, approx, distinct: packs.size };
+}
+
+// Seuils d'affichage d'une carte. En dessous, elle « marche » toujours mais ne
+// dit plus rien : trop peu de territoires renseignés, ou trop peu de valeurs
+// distinctes pour qu'un dégradé se lise.
+const MAP_MIN_SPECIFIC = 5;
+const MAP_MIN_DISTINCT = 3;
+
+function mapIsUsable(cov) {
+  return cov.specific >= MAP_MIN_SPECIFIC && cov.distinct >= MAP_MIN_DISTINCT;
 }
