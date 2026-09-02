@@ -33,8 +33,7 @@ async function importDepositFile(file) {
     await saveDeposits(recs);
     state.deposits = await listDeposits();
     renderDepositList();
-    refreshAfterDeposits();
-    toast(`${recs.length} source(s) importée(s).`);
+    refreshPool({ message: `${recs.length} source(s) importée(s).` });
     return;
   }
   await addDepositsFromText(text);
@@ -53,12 +52,67 @@ async function downloadPng() {
   a.click();
 }
 
+/** Applique un état reçu par l'URL. Toute valeur absente garde son défaut. */
+async function applyLinkState(link) {
+  if (link.d && state.datasets.some((x) => x.id === link.d) && link.d !== state.currentDataset) {
+    $("dataset").value = link.d;
+    await selectDataset(link.d, { keepTarget: false });
+  }
+  if (link.p) $("palette").value = link.p;
+  if (link.s) $("rangeMode").value = link.s;
+
+  const flags = link.f || "";
+  $("nationalFallback").checked = flags.includes("n");
+  $("fltLowRes").checked = flags.includes("l");
+  $("fltOutlier").checked = flags.includes("o");
+  $("includeDiaspora").checked = flags.includes("d");
+  $("showInterp").checked = flags.includes("i");
+  FILTERS.diaspora = $("includeDiaspora").checked;
+  FILTERS.noLowRes = $("fltLowRes").checked;
+  FILTERS.noOutlier = $("fltOutlier").checked;
+
+  if (link.k) {
+    FILTERS.minK = Number(link.k) || 1;
+    $("fltMinK").value = FILTERS.minK;
+    $("fltMinKVal").textContent = FILTERS.minK;
+  }
+  if (link.y) {
+    const [a, b] = link.y.split(":");
+    FILTERS.yMin = a === "" ? null : Number(a);
+    FILTERS.yMax = b === "" ? null : Number(b);
+    renderTimeline();
+  }
+  resetCoverage();
+
+  if (link.t) {
+    const t = decodeProfile(link.t);
+    if (t) {
+      state.target = t;
+      $("targetInput").value = `${t.n},${t.c.join(",")}`;
+    }
+  }
+  if (link.b) {
+    const b = decodeProfile(link.b);
+    if (b) {
+      state.compare = b;
+      $("compareInput").value = `${b.n},${b.c.join(",")}`;
+      $("compareName").textContent = b.n;
+    }
+  }
+  if (link.m && state.catalog.maps.some((m) => m.id === link.m)) state.currentMap = link.m;
+}
+
 async function init() {
   state.map = L.map("map", {
     zoomControl: true,
     attributionControl: false,
     worldCopyJump: false,
   });
+  // Vue de départ indispensable : sans zoom courant, getBoundsZoom() rend null,
+  // fitBounds() pose alors un centre NaN et la carte reste noire — les trois
+  // « Invalid LatLng (NaN, NaN) » que la console affichait au chargement.
+  // Le cadrage réel est ensuite posé par fitMap().
+  state.map.setView([48, 8], 4);
   L.control.attribution({ prefix: false }).addTo(state.map);
 
   const [catalog, sampleData, dsIndex] = await Promise.all([
@@ -94,44 +148,77 @@ async function init() {
     state.deposits = [];
   }
 
+  resetCoverage();
   populateCountrySelect();
   renderSources();
   renderExamples();
+  renderTimeline();
+  renderPeriodChips();
   if (state.datasets.length) {
     renderDatasetSelect();
     $("dataset").onchange = () => selectDataset($("dataset").value);
   } else {
-    $("dataset").closest("label, div")?.remove?.();
-    $("dataset").style.display = "none";
+    $("dataset").closest("label, div, section")?.querySelector("#dataset")?.remove?.();
   }
+
+  wireControls();
+
+  const link = readPermalink();
+  if (link) await applyLinkState(link);
+
   ensureUsableMap();
   renderTabs();
-  if (state.datasets.length) {
-    describeDataset(state.datasets.find((d) => d.id === state.currentDataset));
-  }
+  if (state.datasets.length) describeDataset(state.datasets.find((d) => d.id === state.currentDataset));
   renderDepositList();
-  paintMap();
-
-  $("statN").textContent = String(allSamples().length);
+  renderSortHeaders();
+  updateFilterHint();
   $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
 
+  if (state.target) recompute();
+  else {
+    paintMap();
+    renderTable();
+    // Le profil de la session précédente est proposé, pas rejoué : l'analyse
+    // reste un geste volontaire.
+    try {
+      const last = localStorage.getItem("g25-last-target");
+      if (last && !$("targetInput").value) $("targetInput").value = last;
+    } catch (_) {}
+  }
+
+  updateLegendBar();
+  state.ready = true;
+  $("appLoading").hidden = true;
+}
+
+function wireControls() {
   $("btnAnalyze").onclick = analyze;
   $("targetInput").addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") analyze();
   });
   $("btnReset").onclick = () => {
     state.target = null;
+    state.compare = null;
     state.distances = null;
-    $("targetName").textContent = "—";
-    $("statBest").textContent = "—";
-    $("statBestD").textContent = "—";
+    $("targetInput").value = "";
+    $("compareInput").value = "";
+    for (const id of ["targetName", "statBest", "statBestD", "statPct", "compareName"]) {
+      $(id).textContent = "—";
+    }
     paintMap();
     renderTable();
+    syncPermalink();
   };
+
+  $("btnCompare").onclick = () => setCompare($("compareInput").value);
+  $("btnCompareClear").onclick = clearCompare;
+  $("btnShare").onclick = copyPermalink;
+
   $("palette").onchange = () => {
     if (state.target) paintMap();
     else updateLegendBar();
     renderTable();
+    syncPermalink();
   };
   $("rangeMode").onchange = () => {
     const manual = $("rangeMode").value === "manual";
@@ -140,21 +227,53 @@ async function init() {
     if (state.target) paintMap();
     else updateLegendBar();
     renderTable();
+    syncPermalink();
   };
   $("rangeMin").onchange = $("rangeMax").onchange = () => {
     if ($("rangeMode").value === "manual" && state.target) paintMap();
   };
-  $("includeDiaspora").onchange = () => {
-    // Les diasporas changent la couverture de chaque carte : certaines
-    // deviennent exploitables, d'autres non.
-    ensureUsableMap();
-    renderTabs();
-    if (state.target) analyze();
-    else paintMap();
+
+  $("showInterp").onchange = () => {
+    if (!state.target) {
+      toast("Analysez un profil : la surface se calcule à partir de ses distances.");
+      $("showInterp").checked = false;
+      return;
+    }
+    paintMap();
+    syncPermalink();
   };
   $("nationalFallback").onchange = () => {
     if (state.target) paintMap();
+    updateMapNote();
+    syncPermalink();
   };
+
+  const filterToggle = (id, key) => {
+    $(id).onchange = () => {
+      FILTERS[key] = $(id).checked;
+      refreshPool();
+    };
+  };
+  filterToggle("includeDiaspora", "diaspora");
+  filterToggle("fltLowRes", "noLowRes");
+  filterToggle("fltOutlier", "noOutlier");
+
+  $("fltMinK").oninput = () => {
+    $("fltMinKVal").textContent = $("fltMinK").value;
+  };
+  $("fltMinK").onchange = () => {
+    FILTERS.minK = Number($("fltMinK").value) || 1;
+    refreshPool();
+  };
+
+  $("tlMin").oninput = $("tlMax").oninput = updateTimelineLabels;
+  $("tlMin").onchange = $("tlMax").onchange = () => {
+    stopTimeline();
+    applyTimeline();
+  };
+  $("tlReset").onclick = resetTimeline;
+  $("tlPlay").onclick = toggleTimeline;
+
   $("tableSearch").oninput = renderTable;
   $("btnPng").onclick = downloadPng;
   $("btnAdmix").onclick = runAdmixture;
@@ -172,7 +291,6 @@ async function init() {
       notes: $("depNotes").value.trim() || "",
       role: $("depRole").value,
     });
-
   $("btnExportJson").onclick = exportDeposits;
   $("btnExportTxt").onclick = exportG25Txt;
   $("btnClearDeposits").onclick = async () => {
@@ -180,7 +298,7 @@ async function init() {
     await clearDeposits();
     state.deposits = [];
     renderDepositList();
-    refreshAfterDeposits();
+    refreshPool();
   };
   $("fileImport").onchange = (e) => {
     const f = e.target.files?.[0];
@@ -202,16 +320,12 @@ async function init() {
     if (f) importDepositFile(f);
   });
 
-  try {
-    const last = localStorage.getItem("g25-last-target");
-    if (last) $("targetInput").value = last;
-  } catch (_) {}
-
-  updateLegendBar();
-  renderTable();
+  // La carte occupe une hauteur relative : sans ça elle garde la taille
+  // qu'elle avait au chargement quand on tourne un téléphone.
+  window.addEventListener("resize", () => state.map?.invalidateSize());
 }
 
 init().catch((err) => {
   console.error(err);
-  toast("Erreur de chargement des cartes : " + (err && err.message ? err.message : err));
+  $("appLoading").innerHTML = `<p class="warn-text">Erreur de chargement : ${err && err.message ? err.message : err}</p>`;
 });

@@ -59,6 +59,14 @@ const PALETTES = {
   gris: ["#ffffff", "#d9d9d9", "#969696", "#525252", "#252525"],
 };
 
+// Palettes divergentes : elles ne servent qu'au mode comparaison, ou la valeur
+// affichee est un ecart signe. Le centre doit rester neutre, sinon « aucune
+// difference » se lirait comme un resultat.
+const PALETTES_DIV = {
+  "bleu-rouge": ["#2166ac", "#67a9cf", "#d1e5f0", "#f7f7f7", "#fddbc7", "#ef8a62", "#b2182b"],
+  "violet-vert": ["#762a83", "#af8dc3", "#e7d4e8", "#f7f7f7", "#d9f0d3", "#7fbf7b", "#1b7837"],
+};
+
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
   return [
@@ -97,6 +105,23 @@ function percentile(values, p) {
 }
 
 /**
+ * Rang d'une distance dans une distribution deja triee, entre 0 et 1.
+ *
+ * C'est ce qui rend « 0,032 » lisible : seul, ce nombre ne dit rien, alors que
+ * « plus proche que 96 % des populations du jeu » se comprend sans reference.
+ */
+function percentRank(sortedAsc, value) {
+  let lo = 0;
+  let hi = sortedAsc.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sortedAsc[mid] < value) lo = mid + 1;
+    else hi = mid;
+  }
+  return sortedAsc.length ? lo / sortedAsc.length : 0;
+}
+
+/**
  * Territoires que Natural Earth sépare en polygones distincts alors qu'aucune
  * population de référence ne leur est propre : ils empruntent celle du
  * territoire dont ils sont génétiquement indissociables.
@@ -125,21 +150,20 @@ const ISO_FALLBACK = {
  *    apparaît aussi proche que la mieux documentée, voire plus. C'est une carte
  *    lisse et fausse : ce repli est donc optionnel, et signalé quand il sert.
  */
-function samplesForFeature(feat, samples, { diaspora = false, national = false } = {}) {
+function samplesForFeature(feat, samples, { national = false } = {}) {
   const p = feat.properties || {};
-  const keep = (s) => diaspora || s.role !== "diaspora";
 
-  const specific = samples.filter((s) => keep(s) && matchSpecific(p, s));
+  const specific = samples.filter((s) => matchSpecific(p, s));
   if (specific.length) return { pack: specific, source: "specific" };
 
   const alias = ISO_FALLBACK[p.iso3];
   if (alias) {
-    const sub = samples.filter((s) => keep(s) && s.iso3 === alias);
+    const sub = samples.filter((s) => s.iso3 === alias);
     if (sub.length) return { pack: sub, source: "alias" };
   }
 
   if (!national || p.kind === "country" || !p.iso3) return { pack: [], source: "none" };
-  const pack = samples.filter((s) => keep(s) && s.iso3 === p.iso3);
+  const pack = samples.filter((s) => s.iso3 === p.iso3);
   return pack.length ? { pack, source: "national" } : { pack: [], source: "none" };
 }
 
@@ -159,12 +183,12 @@ function matchSpecific(p, s) {
  * les 96 départements français peints d'une seule teinte parce que le jeu
  * « Gaulois » n'en documente aucun — là où `specific` seul ne dirait rien.
  */
-function mapCoverage(geo, samples, { diaspora = false } = {}) {
+function mapCoverage(geo, samples) {
   let specific = 0;
   let approx = 0;
   const packs = new Set();
   for (const feat of geo.features) {
-    const { pack, source } = samplesForFeature(feat, samples, { diaspora, national: true });
+    const { pack, source } = samplesForFeature(feat, samples, { national: true });
     if (!pack.length) continue;
     if (source === "national") {
       approx++;

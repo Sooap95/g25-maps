@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>G25 Maps — heatmap de proximité génétique</title>
+  <meta name="description" content="Carte de proximité génétique à partir de coordonnées Global25. Calculs entièrement dans le navigateur.">
   <script>
     (function () {
       var p = location.pathname;
@@ -20,83 +21,142 @@
     <aside>
       <div class="brand">
         <h1>G25 <span>Maps</span></h1>
-        <p>Heatmap de distance euclidienne en 25 dimensions. Usage personnel, calculs 100&nbsp;% locaux.</p>
+        <p>Distance génétique en 25 dimensions. Tout est calculé dans votre navigateur&nbsp;: aucune coordonnée n’est envoyée nulle part.</p>
       </div>
       <div class="side-scroll">
-        <label class="lbl">Jeu de données</label>
-        <select id="dataset"></select>
-        <p class="hint" id="datasetHint"></p>
 
-        <label class="lbl">Profil cible (coller un G25 scaled)</label>
-        <textarea id="targetInput" placeholder="MonProfil_scaled,0.1280,0.1452,0.0481,..."></textarea>
-        <div class="examples" id="examples"></div>
-        <button class="btn full" id="btnAnalyze">Analyser</button>
-        <button class="btn ghost full" id="btnReset">Réinitialiser la carte</button>
-        <p class="hint">Format Vahaduo&nbsp;: <span class="mono">Nom,PC1,…,PC25</span>. Utilisez des coordonnées <b>scaled</b>, comme la base.</p>
+        <section class="step">
+          <h2><i>1</i> Votre profil</h2>
 
-        <div class="stats">
-          <div class="stat"><b id="targetName">—</b><span>cible</span></div>
-          <div class="stat"><b id="statBest">—</b><span>plus proche</span></div>
-          <div class="stat"><b id="statBestD">—</b><span>distance</span></div>
-          <div class="stat"><b id="statN">—</b><span>échantillons</span></div>
-        </div>
+          <label class="lbl" for="dataset">Comparer à</label>
+          <select id="dataset" autocomplete="off"></select>
+          <p class="hint" id="datasetHint"></p>
 
-        <label class="lbl">Palette</label>
-        <select id="palette">
-          <option value="vert-rouge">Vert → rouge</option>
-          <option value="jaune-rouge">Jaune → rouge</option>
-          <option value="magma">Magma</option>
-          <option value="viridis">Viridis</option>
-          <option value="ocean">Océan</option>
-          <option value="gris">Gris</option>
-        </select>
-        <label class="lbl">Échelle du dégradé</label>
-        <select id="rangeMode">
-          <option value="smart">Selon la carte (rang sur le Monde)</option>
-          <option value="rank">Par rang (contraste maximal)</option>
-          <option value="auto">Continue (min–max de la carte)</option>
-          <option value="pct">Percentiles 2–98</option>
-          <option value="manual">Manuelle</option>
-        </select>
-        <p class="hint" id="rangeHint"></p>
-        <div class="row" style="margin-top:8px">
-          <input id="rangeMin" type="number" step="0.001" value="0" disabled>
-          <input id="rangeMax" type="number" step="0.001" value="0.12" disabled>
-        </div>
-        <div class="legend" id="legendBar"></div>
-        <div class="legend-scale"><span id="legMin">proche</span><span id="legMax">loin</span></div>
-        <label class="hint check">
-          <input id="includeDiaspora" type="checkbox">
-          Inclure les diasporas (Ashkénazes, Roma, communautés juives…)
-        </label>
-        <label class="hint check">
-          <input id="nationalFallback" type="checkbox">
-          Compléter par la moyenne du pays
-        </label>
-        <p class="hint">Sans cette option, un territoire sans échantillon reste gris. Avec, il prend la
-        valeur de son pays — la même pour toutes ses subdivisions : la carte se remplit mais une région
-        non documentée y paraît aussi proche que la mieux documentée. Ces territoires sont hachurés.</p>
+          <label class="lbl" for="targetInput">Coordonnées G25 <span class="mono">scaled</span></label>
+          <textarea id="targetInput" spellcheck="false" placeholder="MonProfil_scaled,0.1280,0.1452,0.0481,…"></textarea>
+          <div class="examples" id="examples"></div>
+          <button class="btn full" id="btnAnalyze">Analyser</button>
+          <button class="btn ghost full" id="btnReset">Effacer</button>
 
-        <div class="stats">
-          <div class="stat"><b id="hoverName">—</b><span>territoire</span></div>
-          <div class="stat"><b id="hoverDist">—</b><span>distance</span></div>
-        </div>
-        <p class="hint">Échantillon utilisé&nbsp;: <b id="hoverSample">—</b></p>
-        <p class="hint"><b id="statCustom">0</b> source(s) ajoutée(s) par dépôt.</p>
+          <details class="block help">
+            <summary>Je n’ai pas de coordonnées G25</summary>
+            <div class="inner">
+              <p class="hint">Le Global25 n’est pas un test&nbsp;: c’est une projection calculée à partir d’un fichier
+              de données brutes déjà existant (23andMe, MyHeritage, FTDNA, Ancestry…). On obtient une ligne de
+              25&nbsp;nombres, au format <span class="mono">Nom,PC1,…,PC25</span>.</p>
+              <p class="hint">Deux variantes circulent&nbsp;: <b>scaled</b> et <i>non scaled</i>. Cet outil attend la
+              version <b>scaled</b>, la même que sa base — mélanger les deux fausse toutes les distances.</p>
+              <p class="hint">En attendant, les boutons d’exemple ci-dessus chargent un profil réel du jeu sélectionné&nbsp;:
+              de quoi voir ce que produit l’outil avant d’y mettre le vôtre.</p>
+            </div>
+          </details>
+        </section>
 
-        <details class="block" open>
+        <section class="step">
+          <h2><i>2</i> Résultat</h2>
+          <div class="stats">
+            <div class="stat wide"><b id="targetName">—</b><span>profil analysé</span></div>
+            <div class="stat wide"><b id="statBest">—</b><span>population la plus proche</span></div>
+            <div class="stat"><b id="statBestD">—</b><span>distance</span></div>
+            <div class="stat"><b id="statPct">—</b><span>lecture</span></div>
+          </div>
+          <div class="stats">
+            <div class="stat wide"><b id="hoverName">—</b><span>territoire survolé</span></div>
+            <div class="stat"><b id="hoverDist">—</b><span>distance</span></div>
+            <div class="stat"><b id="statN">—</b><span>échantillons retenus</span></div>
+          </div>
+          <p class="hint">Échantillon utilisé&nbsp;: <b id="hoverSample">—</b></p>
+          <button class="btn ghost full" id="btnShare">Copier le lien de ce résultat</button>
+        </section>
+
+        <details class="block">
+          <summary>Comparer deux profils</summary>
+          <div class="inner">
+            <p class="hint">Collez un second profil&nbsp;: la carte affiche alors l’<b>écart</b> entre les deux.
+            Bleu où le profil&nbsp;A est le plus proche, rouge où c’est le profil&nbsp;B. Utile pour deux parents,
+            deux branches, ou soi-même contre un ancêtre reconstitué.</p>
+            <textarea id="compareInput" spellcheck="false" placeholder="ProfilB_scaled,0.13,…"></textarea>
+            <button class="btn full" id="btnCompare">Comparer</button>
+            <button class="btn ghost full" id="btnCompareClear">Revenir à un seul profil</button>
+            <p class="hint">Profil B&nbsp;: <b id="compareName">—</b></p>
+          </div>
+        </details>
+
+        <details class="block">
+          <summary>Filtrer les échantillons</summary>
+          <div class="inner">
+            <p class="hint" id="filterHint"></p>
+
+            <label class="lbl">Périodes</label>
+            <div class="chips" id="periodChips"></div>
+
+            <label class="lbl" for="fltMinK">Taille minimale de la moyenne&nbsp;: <b id="fltMinKVal">1</b></label>
+            <input id="fltMinK" type="range" min="1" max="20" value="1" step="1" autocomplete="off">
+            <p class="hint">Un échantillon <span class="mono">(n=1)</span> est un individu, pas une population.
+            Le monter à 3 ou 5 écarte le plus gros du bruit.</p>
+
+            <label class="check"><input id="fltLowRes" type="checkbox" autocomplete="off"> Écarter les profils bruités <span class="mono">(low_res)</span></label>
+            <label class="check"><input id="fltOutlier" type="checkbox" autocomplete="off"> Écarter les individus marqués aberrants <span class="mono">(_o)</span></label>
+            <label class="check"><input id="includeDiaspora" type="checkbox" autocomplete="off"> Inclure les diasporas (Ashkénazes, Roma…)</label>
+          </div>
+        </details>
+
+        <details class="block">
+          <summary>Apparence de la carte</summary>
+          <div class="inner">
+            <label class="lbl" for="palette">Palette</label>
+            <select id="palette" autocomplete="off">
+              <option value="vert-rouge">Vert → rouge</option>
+              <option value="jaune-rouge">Jaune → rouge</option>
+              <option value="magma">Magma</option>
+              <option value="viridis">Viridis</option>
+              <option value="ocean">Océan</option>
+              <option value="gris">Gris</option>
+            </select>
+
+            <label class="lbl" for="rangeMode">Échelle du dégradé</label>
+            <select id="rangeMode" autocomplete="off">
+              <option value="smart">Selon la carte (rang sur le Monde)</option>
+              <option value="rank">Par rang (contraste maximal)</option>
+              <option value="auto">Continue (min–max de la carte)</option>
+              <option value="pct">Percentiles 2–98</option>
+              <option value="manual">Manuelle</option>
+            </select>
+            <p class="hint" id="rangeHint"></p>
+            <div class="row" style="margin-top:8px">
+              <input id="rangeMin" type="number" step="0.001" value="0" disabled aria-label="minimum">
+              <input id="rangeMax" type="number" step="0.001" value="0.12" disabled aria-label="maximum">
+            </div>
+            <div class="legend" id="legendBar"></div>
+            <div class="legend-scale"><span id="legMin">proche</span><span id="legMax">loin</span></div>
+            <p class="hint" id="legendNote"></p>
+
+            <label class="check"><input id="showInterp" type="checkbox" autocomplete="off"> Surface interpolée entre les échantillons</label>
+            <p class="hint">Remplace les aplats par un dégradé continu, calculé entre les points. Les frontières
+            administratives n’ont aucune réalité génétique&nbsp;; le point d’un échantillon est le centre de son
+            territoire, pas son lieu de fouille.</p>
+
+            <label class="check"><input id="nationalFallback" type="checkbox" autocomplete="off"> Compléter par la moyenne du pays</label>
+            <p class="hint">Sans cette option, un territoire sans échantillon reste gris. Avec, il prend la valeur de
+            son pays — la même pour toutes ses subdivisions&nbsp;: la carte se remplit, mais une région non documentée
+            y paraît aussi proche que la mieux documentée. Ces territoires sont hachurés.</p>
+          </div>
+        </details>
+
+        <details class="block">
           <summary>Modélisation (admixture)</summary>
           <div class="inner">
             <p class="hint">La carte dit de quelle population vous êtes le plus <i>proche</i>.
-            Le modèle dit de quoi vous êtes <i>composé</i> — la bonne question dès qu'un
-            profil est un mélange.</p>
-            <label class="lbl">Nombre de sources</label>
-            <select id="admixK">
+            Le modèle dit de quoi vous êtes <i>composé</i> — la bonne question dès qu’un profil est un mélange.
+            Il n’utilise que les échantillons laissés par vos filtres.</p>
+            <label class="lbl" for="admixK">Nombre de sources</label>
+            <select id="admixK" autocomplete="off">
               <option value="2">2</option>
               <option value="3">3</option>
               <option value="4" selected>4</option>
               <option value="5">5</option>
               <option value="6">6</option>
+              <option value="8">8</option>
             </select>
             <button class="btn full" id="btnAdmix">Calculer le modèle</button>
             <div id="admixResult"><p class="hint">Analysez un profil, puis lancez le calcul.</p></div>
@@ -108,29 +168,29 @@
           <summary>Déposer des sources G25</summary>
           <div class="inner">
             <p class="hint">Collez une ou plusieurs lignes. Elles restent dans ce navigateur et colorent les cartes si un pays / une région est renseigné.</p>
-            <textarea id="depositInput" placeholder="Occitanie_perso_scaled,0.12,..."></textarea>
-            <label class="lbl">Pays</label>
-            <select id="depIso"></select>
+            <textarea id="depositInput" spellcheck="false" placeholder="Occitanie_perso_scaled,0.12,…"></textarea>
+            <label class="lbl" for="depIso">Pays</label>
+            <select id="depIso" autocomplete="off"></select>
             <div class="row">
               <div>
-                <label class="lbl">Région FR</label>
-                <select id="depRegion"></select>
+                <label class="lbl" for="depRegion">Région FR</label>
+                <select id="depRegion" autocomplete="off"></select>
               </div>
               <div>
-                <label class="lbl">Dépt. (ex. 31)</label>
+                <label class="lbl" for="depDept">Dépt. (ex. 31)</label>
                 <input id="depDept" maxlength="3" placeholder="31">
               </div>
             </div>
-            <label class="lbl">NUTS (optionnel, ex. ES51)</label>
+            <label class="lbl" for="depNuts">NUTS (optionnel, ex. ES51)</label>
             <input id="depNuts" placeholder="ITC4, ITH3">
-            <label class="lbl">Rôle</label>
-            <select id="depRole">
+            <label class="lbl" for="depRole">Rôle</label>
+            <select id="depRole" autocomplete="off">
               <option value="regional">régional</option>
               <option value="national">national</option>
               <option value="ethnic">ethnique</option>
               <option value="diaspora">diaspora</option>
             </select>
-            <label class="lbl">Notes</label>
+            <label class="lbl" for="depNotes">Notes</label>
             <input id="depNotes" placeholder="source, année…">
             <button class="btn full" id="btnAddDeposit">Ajouter à la base</button>
             <div class="drop" id="dropZone">Glissez un .txt Vahaduo ou un .json d’export</div>
@@ -141,7 +201,7 @@
             </div>
             <button class="btn ghost danger full" id="btnClearDeposits">Vider les dépôts navigateur</button>
             <div class="deposit-list" id="depositList"></div>
-            <p class="hint">Fichier projet optionnel&nbsp;: <code>data/deposits.json</code> est chargé au démarrage.</p>
+            <p class="hint"><b id="statCustom">0</b> source(s) ajoutée(s). Fichier projet optionnel&nbsp;: <code>data/deposits.json</code>.</p>
           </div>
         </details>
 
@@ -156,25 +216,43 @@
       <div class="toolbar">
         <div class="map-tabs" id="mapTabs"></div>
         <span class="spacer"></span>
-        <button class="btn ghost" id="btnPng">PNG</button>
+        <button class="btn ghost small" id="btnPng">PNG</button>
       </div>
       <div class="map-note" id="mapNote" hidden></div>
+
+      <div class="timeline" id="timeline" hidden>
+        <div class="tl-head">
+          <b>Frise</b>
+          <span class="tl-range"><span id="tlMinVal">—</span> → <span id="tlMaxVal">—</span></span>
+          <span class="spacer"></span>
+          <button class="btn ghost small" id="tlPlay" title="Faire défiler les périodes">▶ Animer</button>
+          <button class="btn ghost small" id="tlReset">Tout</button>
+        </div>
+        <div class="tl-sliders">
+          <input id="tlMin" type="range" autocomplete="off" aria-label="début de la période">
+          <input id="tlMax" type="range" autocomplete="off" aria-label="fin de la période">
+        </div>
+        <div class="tl-marks" id="tlMarks"></div>
+      </div>
+
       <div id="map"></div>
+
       <section class="table-wrap">
         <div class="table-bar">
-          <h2>Table des distances</h2>
-          <input id="tableSearch" placeholder="Filtrer un nom…">
+          <h2>Distances</h2>
+          <input id="tableSearch" placeholder="Filtrer un nom…" aria-label="filtrer">
           <span class="hint" id="tableCount"></span>
         </div>
         <div class="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>Échantillon</th>
-                <th>Distance</th>
-                <th>Pays</th>
-                <th>Rôle</th>
-                <th>Source</th>
+                <th data-sort="n" class="sortable">Échantillon</th>
+                <th data-sort="d" class="sortable sorted-asc">Distance</th>
+                <th data-sort="pct" class="sortable">Rang</th>
+                <th data-sort="y" class="sortable">Date</th>
+                <th data-sort="iso3" class="sortable">Pays</th>
+                <th data-sort="src" class="sortable">Source</th>
               </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -183,15 +261,21 @@
       </section>
     </main>
   </div>
+
+  <div class="loading" id="appLoading"><div class="spinner"></div><p>Chargement des cartes et des données…</p></div>
   <div class="toast" id="toast"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="js/g25.js"></script>
   <script src="js/db.js"></script>
+  <script src="js/filters.js"></script>
+  <script src="js/interp.js"></script>
   <script src="js/app-map.js"></script>
   <script src="js/app-map-2.js"></script>
   <script src="js/admix.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/permalink.js"></script>
   <script src="js/app-ui.js"></script>
   <script src="js/app-init.js"></script>
 </body>

@@ -210,10 +210,14 @@ function greedyModel(target, pool, k) {
   return { parts, error: err };
 }
 
-/** Pool de candidats, en respectant la case « diasporas ». */
+/**
+ * Pool de candidats : exactement le vivier que montre la carte.
+ *
+ * Un modèle bâti sur des échantillons que l'utilisateur vient d'écarter —
+ * profils bruités, périodes décochées — contredirait la carte sans le dire.
+ */
 function admixPool() {
-  const diaspora = $("includeDiaspora").checked;
-  return allSamples().filter((s) => diaspora || s.role !== "diaspora");
+  return pool();
 }
 
 function runAdmixture() {

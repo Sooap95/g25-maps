@@ -27,6 +27,7 @@ import urllib.request
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import demonyms  # noqa: E402
+import enrich_datasets  # noqa: E402
 import resolver  # noqa: E402
 import tag_iso3  # noqa: E402  (utilisé comme table d'ethnonymes curée)
 
@@ -311,6 +312,12 @@ def main():
         m["scale"] = SCALES.get(m["id"], SCALE_DEFAULT)
     CATALOG.write_text(json.dumps(cat, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print("catalog : scale ecrit")
+
+    # Datation, qualite et coordonnees : deduites des etiquettes et des fonds de
+    # carte, sans reseau. Enchaine ici pour qu'un jeu fraichement telecharge ne
+    # reste jamais sans ces champs — la frise et la surface interpolee en vivent.
+    print()
+    enrich_datasets.main()
 
 
 if __name__ == "__main__":

@@ -1,40 +1,92 @@
 function analyze() {
   const parsed = parseG25($("targetInput").value);
   if (!parsed.length) {
-    toast("Collez une ligne G25 (nom + 25 nombres).");
+    toast("Collez une ligne G25 : un nom puis 25 nombres.");
     return;
   }
   state.target = parsed[0];
-  const samples = allSamples();
-  const distances = samples.map((s) => ({
+  recompute();
+  try {
+    localStorage.setItem("g25-last-target", $("targetInput").value);
+  } catch (_) {}
+  syncPermalink();
+}
+
+/** Recalcule tout ce qui dépend du profil ou du vivier, sans relire la saisie. */
+function recompute() {
+  if (!state.target) {
+    state.distances = null;
+    state.sortedDistances = null;
+    paintMap();
+    renderTable();
+    return;
+  }
+  const samples = pool();
+  const rows = samples.map((s) => ({
     n: s.n,
     d: euclid(state.target.c, s.c),
     iso3: s.iso3,
     role: s.role,
+    y: s.y ?? null,
+    lat: s.lat ?? null,
+    lon: s.lon ?? null,
     custom: !!s.custom,
     src: sourceLabel(s),
   }));
-  distances.sort((a, b) => a.d - b.d);
-  state.distances = distances;
-  $("statN").textContent = String(samples.length);
-  $("statBest").textContent = distances[0] ? distances[0].n : "—";
-  $("statBestD").textContent = distances[0] ? formatDist(distances[0].d) : "—";
+  rows.sort((a, b) => a.d - b.d);
+  state.sortedDistances = rows.map((r) => r.d);
+  // Rang en pourcentage : 100 % = la population la plus proche du vivier.
+  // C'est la seule lecture qui reste valable quand on change de jeu, où les
+  // distances brutes n'ont plus du tout la même étendue.
+  const n = Math.max(1, rows.length - 1);
+  rows.forEach((r, i) => (r.pct = 100 * (1 - i / n)));
+  state.distances = rows;
+
+  $("statN").textContent = String(rows.length);
+  $("statBest").textContent = rows[0] ? rows[0].n : "—";
+  $("statBestD").textContent = rows[0] ? formatDist(rows[0].d) : "—";
+  $("statPct").textContent = rows[0] ? qualifyDistance(rows[0].d) : "—";
   $("targetName").textContent = state.target.n;
+  updateFilterHint();
   paintMap();
   renderTable();
-  try {
-    localStorage.setItem("g25-last-target", $("targetInput").value);
-  } catch (_) {}
+}
+
+function setCompare(text) {
+  const parsed = parseG25(text);
+  if (!parsed.length) {
+    toast("Second profil illisible : un nom puis 25 nombres.");
+    return;
+  }
+  if (!state.target) {
+    toast("Analysez d’abord un premier profil.");
+    return;
+  }
+  state.compare = parsed[0];
+  $("compareName").textContent = state.compare.n;
+  toast("Mode comparaison : la carte montre l’écart entre les deux profils.");
+  paintMap();
+  renderTable();
+  syncPermalink();
+}
+
+function clearCompare() {
+  state.compare = null;
+  $("compareName").textContent = "—";
+  $("compareInput").value = "";
+  paintMap();
+  renderTable();
+  syncPermalink();
 }
 
 /**
  * Profils de démonstration.
  *
- * Ils étaient jusqu'ici codés en dur sur des noms d'échantillons (`French_Paris`)
- * qui n'existent plus depuis le changement de jeu de données : les boutons ne
- * faisaient plus rien, et un visiteur sans coordonnées G25 n'avait aucun moyen
- * d'essayer l'outil. On les cherche donc par motif dans le jeu chargé, et on
- * n'affiche que ceux qui y ont trouvé quelque chose.
+ * Ils étaient codés en dur sur des noms d'échantillons (`French_Paris`) qui
+ * n'existent plus depuis le changement de collection : les boutons ne faisaient
+ * plus rien, et un visiteur sans coordonnées G25 n'avait aucun moyen d'essayer
+ * l'outil. On les cherche donc par motif dans le jeu chargé, et on n'affiche
+ * que ceux qui y ont trouvé quelque chose.
  */
 const EXAMPLE_HINTS = [
   { label: "Paris", find: /ile-de-france_paris/i },
@@ -42,7 +94,8 @@ const EXAMPLE_HINTS = [
   { label: "Occitanie", find: /occitan_occitanie_haute-garonne/i },
   { label: "Sicile", find: /^italian_sicily_\(/i },
   { label: "Gaulois", find: /_IA:/ },
-  { label: "Âge du Fer", find: /^(france|gaul)/i },
+  { label: "Âge du Fer", find: /_IA(_|$)/ },
+  { label: "Viking", find: /viking/i },
 ];
 
 function renderExamples() {
@@ -185,7 +238,13 @@ function renderSources() {
   rows.push(
     `<div class="src-item"><b>Métrique</b>` +
       `<div class="hint">Distance euclidienne sur ${state.dims} dimensions, coordonnées <i>scaled</i>. ` +
-      `Un pays prend la distance de son échantillon le plus proche.</div></div>`
+      `Un territoire prend la distance de son échantillon le plus proche.</div></div>`
+  );
+  rows.push(
+    `<div class="src-item"><b>Datation et localisation</b>` +
+      `<div class="hint">Déduites de l’étiquette de chaque échantillon et du territoire auquel il est rattaché. ` +
+      `Une date issue d’un mot-clé (« LBA », « Early Medieval ») est indicative et calée sur la chronologie européenne ; ` +
+      `le point d’un échantillon est le centre de son territoire, pas son lieu de fouille.</div></div>`
   );
   box.innerHTML = rows.join("");
 }
@@ -199,8 +258,8 @@ function attributionText() {
 /**
  * Bascule de jeu de données.
  *
- * Les jeux ne sont pas chargés d'avance : les anciens pèsent 1,6 Mo, et tout
- * charger au démarrage coûterait plusieurs secondes pour des données que
+ * Les jeux ne sont pas chargés d'avance : les anciens pèsent près de 2 Mo, et
+ * tout charger au démarrage coûterait plusieurs secondes pour des données que
  * l'utilisateur ne consultera peut-être jamais. On ne récupère donc que le jeu
  * sélectionné, et on garde en mémoire ceux déjà vus.
  */
@@ -211,6 +270,7 @@ async function selectDataset(id, { keepTarget = true } = {}) {
   const sel = $("dataset");
   sel.disabled = true;
   $("datasetHint").textContent = "Chargement…";
+  $("datasetHint").classList.add("busy");
 
   try {
     let doc = state.datasetCache[id];
@@ -222,6 +282,11 @@ async function selectDataset(id, { keepTarget = true } = {}) {
     state.samples = doc.samples;
     state.sources = normalizeSources(doc.sources || doc.source);
     state.dims = doc.dims || 25;
+
+    // Les filtres temporels du jeu précédent n'ont aucun sens ici : les bornes
+    // d'un jeu médiéval ne recouvrent pas celles d'un jeu néolithique.
+    FILTERS.yMin = FILTERS.yMax = null;
+    FILTERS.periods = null;
     resetCoverage();
 
     state.map.attributionControl.removeAttribution(state.attribution);
@@ -231,8 +296,8 @@ async function selectDataset(id, { keepTarget = true } = {}) {
     renderSources();
     populateCountrySelect();
     renderExamples();
-    $("statN").textContent = String(allSamples().length);
-    describeDataset(spec);
+    renderTimeline();
+    renderPeriodChips();
 
     // Le modèle d'admixture porte sur l'ancien jeu : il ne veut plus rien dire.
     state.admix = null;
@@ -242,34 +307,33 @@ async function selectDataset(id, { keepTarget = true } = {}) {
     // ne documente aucun département, « Âge du Fer Europe » aucune région.
     const moved = ensureUsableMap();
     renderTabs();
+    describeDataset(spec);
     if (moved) toast(`« ${moved.from} » n’est pas couvert par ce jeu — passage à « ${moved.to} ».`);
 
-    if (keepTarget && state.target) analyze();
+    if (keepTarget && state.target) recompute();
     else {
       paintMap();
       renderTable();
     }
+    syncPermalink();
   } catch (e) {
     toast("Chargement impossible : " + (e && e.message ? e.message : e));
     $("datasetHint").textContent = "Échec du chargement.";
   } finally {
     sel.disabled = false;
+    $("datasetHint").classList.remove("busy");
   }
 }
 
 function describeDataset(spec) {
   const pct = spec.count ? Math.round((100 * spec.tagged) / spec.count) : 0;
-  const diaspora = $("includeDiaspora").checked;
-  const usable = state.catalog.maps.filter((m) => mapIsUsable(coverageFor(m.id, diaspora)));
+  const usable = state.catalog.maps.filter((m) => mapIsUsable(coverageFor(m.id)));
+  const bits = [`${spec.count.toLocaleString("fr-FR")} échantillons`, `${pct} % localisables`];
+  if (spec.dated) bits.push(`${Math.round((100 * spec.dated) / spec.count)} % datés`);
   const scope = usable.length
     ? `Cartes exploitables : ${usable.map((m) => m.title).join(", ")}.`
-    : "Aucune carte n’est assez couverte par ce jeu ; la table des distances reste utilisable.";
-  $("datasetHint").textContent =
-    `${spec.count.toLocaleString("fr-FR")} échantillons · ${pct} % localisables. ` +
-    (spec.kind === "ancient"
-      ? "Jeu ancien : les distances se lisent par rapport à des populations disparues. "
-      : "") +
-    scope;
+    : "Aucune carte n’est assez couverte ; la table des distances reste utilisable.";
+  $("datasetHint").textContent = `${bits.join(" · ")}. ${scope}`;
 }
 
 function renderDatasetSelect() {

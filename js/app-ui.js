@@ -1,15 +1,175 @@
 /**
- * Un dépôt peut rendre une carte exploitable — ou cesser de la rendre telle.
- * À appeler après toute modification de la base locale.
+ * Un dépôt ou un filtre change le vivier : la couverture des cartes, les
+ * distances et le modèle doivent tous être refaits ensemble, sans quoi la
+ * carte, la table et l'admixture raconteraient trois histoires différentes.
  */
-function refreshAfterDeposits() {
+function refreshPool({ message } = {}) {
   resetCoverage();
-  ensureUsableMap();
+  const moved = ensureUsableMap();
   renderTabs();
   $("statCustom").textContent = String(state.deposits.length + state.fileDeposits.length);
-  if (state.target) analyze();
-  else paintMap();
+  updateFilterHint();
+  recompute();
+  if (moved) toast(`« ${moved.from} » n’est plus couvert — passage à « ${moved.to} ».`);
+  else if (message) toast(message);
+  syncPermalink();
 }
+
+function updateFilterHint() {
+  const box = $("filterHint");
+  if (!box) return;
+  const { total, kept, dropped } = filterSummary();
+  box.textContent = dropped
+    ? `${kept} échantillons retenus sur ${total} — ${dropped} écartés par vos filtres.`
+    : `${total} échantillons, aucun filtre actif.`;
+  box.classList.toggle("warn-text", kept < 20 && total >= 20);
+}
+
+/* ------------------------------------------------------------------ frise */
+
+let tlTimer = null;
+
+function renderTimeline() {
+  const box = $("timeline");
+  const range = datasetYearRange(state.samples);
+  if (!range || range.count < 15) {
+    box.hidden = true;
+    stopTimeline();
+    FILTERS.yMin = FILTERS.yMax = null;
+    return;
+  }
+  box.hidden = false;
+  for (const id of ["tlMin", "tlMax"]) {
+    const el = $(id);
+    el.min = range.min;
+    el.max = range.max;
+    el.step = Math.max(1, Math.round((range.max - range.min) / 400));
+  }
+  $("tlMin").value = FILTERS.yMin ?? range.min;
+  $("tlMax").value = FILTERS.yMax ?? range.max;
+  state.yearRange = range;
+  renderTimelineMarks(range);
+  updateTimelineLabels();
+}
+
+/** Repères de période sous la frise, pour situer le curseur sans compter. */
+function renderTimelineMarks(range) {
+  const box = $("tlMarks");
+  const span = Math.max(1, range.max - range.min);
+  const present = new Set(state.samples.map((s) => s.p).filter(Boolean));
+  box.innerHTML = "";
+  for (const [code, label] of PERIOD_LABELS) {
+    if (!present.has(code)) continue;
+    const years = state.samples.filter((s) => s.p === code && s.y != null).map((s) => s.y);
+    if (!years.length) continue;
+    const a = Math.max(range.min, Math.min(...years));
+    const b = Math.min(range.max, Math.max(...years));
+    if (b <= a) continue;
+    const el = document.createElement("span");
+    el.className = `tl-mark tl-${code}`;
+    el.style.left = `${(100 * (a - range.min)) / span}%`;
+    el.style.width = `${(100 * (b - a)) / span}%`;
+    el.textContent = label;
+    el.title = `${label} — ${formatYear(a)} à ${formatYear(b)}`;
+    box.appendChild(el);
+  }
+}
+
+function updateTimelineLabels() {
+  $("tlMinVal").textContent = formatYear(Number($("tlMin").value));
+  $("tlMaxVal").textContent = formatYear(Number($("tlMax").value));
+}
+
+function applyTimeline() {
+  let lo = Number($("tlMin").value);
+  let hi = Number($("tlMax").value);
+  // Les deux curseurs partagent la même piste : rien n'empêche de croiser le
+  // début et la fin, on remet donc l'intervalle à l'endroit.
+  if (lo > hi) [lo, hi] = [hi, lo];
+  const range = state.yearRange;
+  FILTERS.yMin = range && lo <= range.min ? null : lo;
+  FILTERS.yMax = range && hi >= range.max ? null : hi;
+  updateTimelineLabels();
+  refreshPool();
+}
+
+function resetTimeline() {
+  stopTimeline();
+  const range = state.yearRange;
+  if (!range) return;
+  $("tlMin").value = range.min;
+  $("tlMax").value = range.max;
+  FILTERS.yMin = FILTERS.yMax = null;
+  updateTimelineLabels();
+  refreshPool();
+}
+
+/**
+ * Défilement automatique : une fenêtre glissante parcourt la frise.
+ * C'est là que le jeu ancien devient lisible — on voit les populations
+ * proches se déplacer d'une période à l'autre, ce qu'aucune vue figée ne montre.
+ */
+function toggleTimeline() {
+  if (tlTimer) return stopTimeline();
+  const range = state.yearRange;
+  if (!range) return;
+  const span = range.max - range.min;
+  const win = Math.max(200, Math.round(span * 0.18));
+  let lo = range.min;
+  $("tlPlay").textContent = "■ Arrêter";
+  tlTimer = setInterval(() => {
+    lo += Math.round(span * 0.04);
+    if (lo + win > range.max) lo = range.min;
+    $("tlMin").value = lo;
+    $("tlMax").value = lo + win;
+    applyTimeline();
+  }, 900);
+  applyTimeline();
+}
+
+function stopTimeline() {
+  if (tlTimer) clearInterval(tlTimer);
+  tlTimer = null;
+  const btn = $("tlPlay");
+  if (btn) btn.textContent = "▶ Animer";
+}
+
+/* --------------------------------------------------------------- périodes */
+
+function renderPeriodChips() {
+  const box = $("periodChips");
+  const present = new Set(state.samples.map((s) => s.p).filter(Boolean));
+  box.innerHTML = "";
+  if (!present.size) {
+    box.innerHTML = `<span class="hint">Ce jeu ne porte pas de période.</span>`;
+    return;
+  }
+  for (const [code, label] of PERIOD_LABELS) {
+    if (!present.has(code)) continue;
+    const n = state.samples.filter((s) => s.p === code).length;
+    const b = document.createElement("button");
+    b.className = "chip toggle" + (FILTERS.periods && !FILTERS.periods.has(code) ? " off" : " on");
+    b.textContent = `${label} (${n})`;
+    b.onclick = () => {
+      const all = [...present];
+      if (!FILTERS.periods) FILTERS.periods = new Set(all);
+      if (FILTERS.periods.has(code)) FILTERS.periods.delete(code);
+      else FILTERS.periods.add(code);
+      // Tout sélectionné revient à ne rien filtrer : on efface l'ensemble
+      // plutôt que de le garder, pour que les échantillons non datés repassent.
+      if (FILTERS.periods.size === all.length) FILTERS.periods = null;
+      if (FILTERS.periods && !FILTERS.periods.size) {
+        FILTERS.periods = null;
+        toast("Au moins une période doit rester sélectionnée.");
+      }
+      renderPeriodChips();
+      refreshPool();
+    };
+    box.appendChild(b);
+  }
+}
+
+/* ----------------------------------------------------------------- dépôts */
 
 function renderDepositList() {
   const box = $("depositList");
@@ -28,7 +188,7 @@ function renderDepositList() {
       await deleteDeposit(b.dataset.id);
       state.deposits = await listDeposits();
       renderDepositList();
-      refreshAfterDeposits();
+      refreshPool();
     };
   });
 }
@@ -54,8 +214,7 @@ async function addDepositsFromText(text, meta = {}) {
   await saveDeposits(recs);
   state.deposits = await listDeposits();
   renderDepositList();
-  refreshAfterDeposits();
-  toast(`${recs.length} source(s) ajoutée(s) à la base locale.`);
+  refreshPool({ message: `${recs.length} source(s) ajoutée(s) à la base locale.` });
   return recs.length;
 }
 
